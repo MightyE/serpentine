@@ -14,13 +14,16 @@ import type { Phenotype } from '../render/contract'
 import type { RealTraitNotes } from './support/traitNotes'
 import { ballPython, ballPythonRealTraitNotes } from './ballPython'
 import { cornSnake, cornSnakeRealTraitNotes } from './cornSnake'
+import { hognose, hognoseRealTraitNotes } from './hognose'
 
 export { ballPython, ballPythonRealTraitNotes } from './ballPython'
 export { cornSnake, cornSnakeRealTraitNotes } from './cornSnake'
+export { hognose, hognoseRealTraitNotes } from './hognose'
 
-export const allSpecies: readonly SpeciesDefinition<Phenotype>[] = [ballPython, cornSnake]
+export const allSpecies: readonly SpeciesDefinition<Phenotype>[] = [ballPython, cornSnake, hognose]
 
 export const allRealTraitNotes: Readonly<Record<string, RealTraitNotes>> = {
   'ball-python': ballPythonRealTraitNotes,
   'corn-snake': cornSnakeRealTraitNotes,
+  hognose: hognoseRealTraitNotes,
 }

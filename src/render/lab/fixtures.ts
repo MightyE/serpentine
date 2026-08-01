@@ -11,6 +11,7 @@
 
 import type { Phenotype } from '../contract'
 import { rgba } from '../colour'
+import { HOGNOSE_SNOUT_SHAPE } from '../snout'
 
 /** Sensible eyes: oversized, with a catchlight. See `head.ts` for why. */
 function eyes(iris: [number, number, number], sizeScale = 1.35): Phenotype['eye'] {
@@ -32,6 +33,9 @@ function body(
 }
 
 const EMPTY: Readonly<Record<string, never>> = {}
+
+/** Every hognose fixture needs this — see `render/snout/index.ts` for what reads it. */
+const HOGNOSE_EXTRA: Phenotype['extra'] = { snoutShape: HOGNOSE_SNOUT_SHAPE }
 
 export const FIXTURES: readonly Phenotype[] = [
   {
@@ -250,5 +254,96 @@ export const FIXTURES: readonly Phenotype[] = [
       { kind: 'modifier', name: 'ghost', params: { amount: 0.6 } },
     ],
     extra: EMPTY,
+  },
+  {
+    seed: 'fixture-hognose-normal',
+    label: 'Hognose — wild type',
+    baseColour: rgba(176, 146, 96),
+    patternColour: rgba(92, 62, 40),
+    bellyColour: rgba(238, 222, 182),
+    eye: eyes([112, 84, 50], 1.3),
+    // Short and stout — see `species/hognose/phenotype.ts` for the full reasoning behind these
+    // numbers relative to the corn snake and ball python fixtures above.
+    body: body(0.7, 1.4, 1.0, 0.9),
+    effects: [],
+    stages: [
+      { kind: 'base', name: 'solid', params: { colour: '@baseColour' } },
+      {
+        kind: 'pattern',
+        name: 'blotches',
+        params: { colour: '@patternColour', scaleU: 11, scaleV: 0.62, threshold: 0.5, octaves: 3 },
+      },
+      { kind: 'mask', name: 'belly', params: { colour: '@bellyColour', start: 0.74 } },
+    ],
+    extra: HOGNOSE_EXTRA,
+  },
+  {
+    seed: 'fixture-hognose-albino',
+    label: 'Hognose — albino',
+    baseColour: rgba(252, 176, 96),
+    patternColour: rgba(226, 122, 48),
+    bellyColour: rgba(238, 222, 182),
+    eye: eyes([224, 64, 64], 1.35),
+    body: body(0.7, 1.4, 1.0, 0.9),
+    effects: [],
+    stages: [
+      { kind: 'base', name: 'solid', params: { colour: '@baseColour' } },
+      {
+        kind: 'pattern',
+        name: 'blotches',
+        params: { colour: '@patternColour', scaleU: 11, scaleV: 0.62, threshold: 0.5, octaves: 3 },
+      },
+      { kind: 'mask', name: 'belly', params: { colour: '@bellyColour', start: 0.74 } },
+      // Same one-line-per-morph shape as the corn snake amel fixture above.
+      { kind: 'modifier', name: 'albino', params: { amount: 1, warmHue: 22 } },
+    ],
+    extra: HOGNOSE_EXTRA,
+  },
+  {
+    seed: 'fixture-hognose-superconda',
+    label: 'Hognose — superconda',
+    baseColour: rgba(176, 146, 96),
+    patternColour: rgba(92, 62, 40),
+    bellyColour: rgba(238, 222, 182),
+    eye: eyes([112, 84, 50], 1.3),
+    body: body(0.7, 1.4, 1.0, 0.9),
+    effects: [],
+    stages: [
+      { kind: 'base', name: 'solid', params: { colour: '@baseColour' } },
+      {
+        kind: 'pattern',
+        name: 'blotches',
+        params: { colour: '@patternColour', scaleU: 6, scaleV: 0.62, threshold: 0.42, softness: 0.14, octaves: 3 },
+      },
+      { kind: 'mask', name: 'belly', params: { colour: '@bellyColour', start: 0.74 } },
+      // Two copies of anaconda: near-patternless but for a thin dorsal stripe, and — unlike ball
+      // python champagne's real super form — not lethal. See `species/hognose/loci/anaconda.ts`.
+      {
+        kind: 'modifier',
+        name: 'patternReduction',
+        params: { amount: 0.94, keepDorsal: 0.1, softness: 0.16, towards: '@baseColour' },
+      },
+    ],
+    extra: HOGNOSE_EXTRA,
+  },
+  {
+    seed: 'fixture-hognose-superarctic',
+    label: 'Hognose — superarctic',
+    baseColour: rgba(232, 226, 220),
+    patternColour: rgba(38, 32, 30),
+    bellyColour: rgba(238, 222, 182),
+    eye: eyes([112, 84, 50], 1.3),
+    body: body(0.7, 1.4, 1.0, 0.9),
+    effects: [],
+    stages: [
+      { kind: 'base', name: 'solid', params: { colour: '@baseColour' } },
+      {
+        kind: 'pattern',
+        name: 'blotches',
+        params: { colour: '@patternColour', scaleU: 11, scaleV: 0.62, threshold: 0.5, octaves: 3 },
+      },
+      { kind: 'mask', name: 'belly', params: { colour: '@bellyColour', start: 0.74 } },
+    ],
+    extra: HOGNOSE_EXTRA,
   },
 ]

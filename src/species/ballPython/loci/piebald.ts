@@ -1,5 +1,6 @@
 import type { Locus, PolygenicTrait, TraitProjection } from '../../../genetics/types'
 import type { Phenotype } from '../../../render/contract'
+import { withLabel } from '../../support/phenotypeKey'
 import type { RealVsModeledNote } from '../../support/traitNotes'
 import { key } from '../../support/genotypeKey'
 
@@ -57,6 +58,7 @@ export const piebaldProjection: TraitProjection<Phenotype> = {
     const whitePercent = ctx.traits.piebaldWhitePercent
     const coverage = (typeof whitePercent === 'number' ? whitePercent : 15) / 100
     Object.assign(draft, {
+      label: withLabel(draft.label, 'Piebald'),
       // The real `piebald` mask stage (`render/stages/piebald.ts`) — it already draws exactly
       // this: irregular unpigmented patches, indifferent to whatever pattern is underneath.
       stages: [

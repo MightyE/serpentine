@@ -5,6 +5,7 @@
  * animal is actually worth.
  */
 import type { EventBus } from './seams'
+import { STARTING_MONEY } from './tuning'
 
 declare module './seams' {
   interface GameEventMap {
@@ -21,7 +22,8 @@ export interface Economy {
   spend(amount: number, reason: string): boolean
 }
 
-export function createEconomy(bus: EventBus, startingBalance = 500): Economy {
+/** Defaults to `tuning.ts`'s `STARTING_MONEY` — that file is the only constants file. */
+export function createEconomy(bus: EventBus, startingBalance: number = STARTING_MONEY): Economy {
   let balance = startingBalance
 
   return {

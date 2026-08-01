@@ -93,6 +93,31 @@ that treats "snake" as implying one sex-determination system, that's a bug.
   progression content into `unlockRegistry.ts`; that's a deliberately reserved seam (see
   `docs/project-ladder.md`).
 
+## The UI layer, and the session
+
+`src/ui/` is React and nothing else — no game state lives in a component. Everything runs through
+`src/game/session.ts`, a plain class with a coarse `subscribe()` callback, which means the whole
+loop (spawn, pair, predict, breed, sell, advance) is drivable from a test with no renderer at all.
+`src/game/session.test.ts` is exactly that, and it is the first place to look when something in the
+app misbehaves — if it passes there, the bug is in a component.
+
+Two things the session owns that nothing else does:
+
+- **Genetic load is bolted on at the game layer**, not authored into species files. `loadPool.ts`'s
+  `playableSpecies()` returns the authored species plus sixty hidden recessive loci and their
+  viability rules. `src/species/` stays about *morphs*, which is what a person wants to edit.
+- **Belief is inferred one locus at a time.** `inferKnowledge` enumerates the joint candidate space
+  across every locus, which for a whole species is six figures of genotypes and refuses (correctly)
+  rather than hanging the browser. `Session.beliefAt` narrows the species to a single locus first.
+  That is also the only form of the question a player ever asks.
+
+## Cheat mode
+
+Name any snake **`Gregor Mendel`** and a "Lab notebook" tab appears. It acts on the live game, and
+the save records that cheats were used and how often — record, don't restrict. It rides the
+ordinary `FlagSet` / `UnlockRegistry` seams; there is no dev build. See `src/game/cheats.ts` and
+`docs/state-of-play.md`.
+
 ## Known limitations (don't "fix" these without reading why first)
 
 - **Linkage between loci is a declared, throwing seam, not an implemented mechanic.**
@@ -106,9 +131,13 @@ that treats "snake" as implying one sex-determination system, that's a bug.
   segment, so a sufficiently tight curve shears the markings slightly. Invisible at default
   `turnRate`/`pointCount`; visible if either is pushed hard. Documented as a future project, not
   fixed — see the project ladder.
-- **Inbreeding coefficient, genetic load, and pedigree tracking are designed, not built.** The
-  design is in `docs/balance-charter.md` (principle 3); there is no pedigree/`F`/genetic-load code
-  in `src/` as of this writing. Don't assume it exists because the design docs discuss it.
+- **Genetic load is real, and `vigor` must stay a readout.** `genetics/pedigree.ts` and
+  `genetics/load.ts` implement Wright's `F`, kinship and the deleterious-recessive pool; the game
+  layer stores `F` and expressed load on a `SnakeRecord` at hatch. `load.ts`'s `vigor()` is display
+  only, and `load.test.ts` asserts that **no file under `src/genetics/`, `src/species/` or
+  `src/render/` so much as names it** — including the `genetics/index.ts` barrel. The moment
+  something simulates a summary number, the summary *is* the model. Import it from
+  `@/genetics/load` in the UI, never re-export it.
 
 ## Repo etiquette
 

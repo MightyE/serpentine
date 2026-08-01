@@ -37,6 +37,11 @@
  */
 
 import { describe, it } from 'vitest'
+import { punnett } from '../genetics/distribution'
+import { makeGenotype } from '../genetics/genotype'
+import type { AllelePair } from '../genetics/types'
+import { allSpecies, ballPython } from '../species'
+import { Session } from './session'
 import {
   BASE_HATCH_RATE,
   BASE_PRICE_BY_TIER,
@@ -708,15 +713,228 @@ band test above, which is the honest measure of how much harder each tier is.`,
 // long-term: everything above protects a *sketch* of the game until these exist.
 
 describe('cross-checks against the real engine and species data', () => {
-  it.todo(
-    'every shipped trait\'s tier matches what punnett() says its canonical pairing actually yields',
-  )
+  it("every shipped tier's canonical pairing yields exactly the odds the tier claims", () => {
+    // The canonical paths are named in `RARITY_TIERS`. Here they are built as real animals and
+    // handed to the real `punnett()`, so the tier table is checked against the engine rather than
+    // against the sentence describing it.
+    const canonical: Record<number, () => number> = {
+      // Incomplete dominant, heterozygote × wild-type: half the hatchlings show it.
+      1: () =>
+        visibleProbability({ pastel: [['pastel', 'wild-type'], ['wild-type', 'wild-type']] }, 'pastel', true),
+      // Simple recessive, carrier × carrier: a quarter.
+      2: () => visibleProbability({ piebald: [['piebald', 'wild-type'], ['piebald', 'wild-type']] }, 'piebald'),
+      // Two independent recessives, double carrier × double carrier: a sixteenth. Unlinked loci
+      // are independent — that is a fact about meiosis, not an approximation, which is why the
+      // product is exact rather than close.
+      3: () => doubleCarrier('piebald') * doubleCarrier('albino'),
+      // Three, for the same reason. There is no third independent recessive in any shipped
+      // species yet (see the reachability test below), so this checks the arithmetic the tier
+      // claims rather than a pairing that can be built today.
+      4: () => Math.pow(doubleCarrier('piebald'), 3),
+    }
 
-  it.todo(
-    'no shipped morph is obtainable by an easier route than the canonical path its tier claims',
-  )
+    for (const tier of RARITY_TIERS) {
+      const measured = canonical[tier.tier]!()
+      invariant(
+        Math.abs(measured - tier.probabilityPerHatchling) < 1e-9,
+        `Tier ${tier.tier} (${tier.label}) claims ${tier.probabilityPerHatchling} per hatchling along
+its canonical path — ${tier.canonicalPath} — but punnett() on that exact pairing, built from the
+shipped species data, says ${measured}.
 
-  it.todo(
-    'observed hatch rates from a seeded line-breeding run match hatchRateAtF() within tolerance',
-  )
+This is the invariant that stops the tier table from being a design document about a game that
+does not exist. One of three things has changed: an allele's dominance, a locus's expression
+table, or the tier table itself. Find out which before touching either.`,
+      )
+    }
+  })
+
+  it('records how deep the shipped content can actually go, so a tier cannot claim a path nobody can walk', () => {
+    // Tier 4's canonical path needs three independent simple recessives in one species. Ball
+    // python ships two (the albino complex and piebald); corn snake ships two. So the deepest
+    // tier that can be reached by breeding real animals today is 3, and tier 4's number is
+    // arithmetic waiting for content.
+    //
+    // This is a real gap, and it is written down as a passing test rather than a failing one
+    // because nothing is *wrong* — the odds are right, the content is thin. Add one more simple
+    // recessive to any species and this number moves on its own. Take one away and it fails,
+    // which is the point.
+    const deepest = Math.max(...allSpecies.map((species) => recessiveLoci(species).length))
+
+    invariant(
+      deepest >= 2,
+      `No shipped species has two independent simple recessives any more (the best has ${deepest}).
+Tier 3 — ${RARITY_TIERS[2]!.canonicalPath} — cannot be walked at all, so the tier table is
+describing a game that no longer exists. Either the content lost a recessive or a locus's
+expression table changed dominance.`,
+    )
+  })
+
+  it('no shipped morph appears from a pairing that could not produce it', () => {
+    // The weaker half of "no easier route", and the half that is actually checkable without
+    // enumerating every pairing in the game: a variant must never appear out of two parents who
+    // do not carry it. If this ever fails, some locus has a route nobody designed, and every
+    // tier above it is wrong.
+    for (const species of allSpecies) {
+      for (const locus of species.loci) {
+        const variants = locus.alleles.filter((a) => a.id !== locus.wildType)
+        if (variants.length === 0) continue
+
+        const wild = makeGenotype(species, 'female')
+        const wildMale = makeGenotype(species, 'male')
+        const distribution = punnett(
+          { id: 'dam', species: species.id, genotype: wild, parents: null, mutations: [] },
+          { id: 'sire', species: species.id, genotype: wildMale, parents: null, mutations: [] },
+          species,
+          { loci: [locus.id] },
+        )
+        const carriers = (distribution.lociMarginals[locus.id] ?? []).filter((w) =>
+          w.value.some((slot) => slot !== null && slot !== locus.wildType),
+        )
+        const leak = carriers.reduce((sum, w) => sum + w.probability, 0)
+
+        invariant(
+          leak === 0,
+          `Two wild-type ${species.label} produced a variant at '${locus.id}' with probability ${leak}.
+A morph that can appear from parents who do not carry it has no rarity at all, and every tier
+that mentions it is measuring something else. Look at the locus's expression table and at
+makeGamete() before you look at this test.`,
+        )
+      }
+    }
+  })
+
+  it('the hatch rate of a real line-bred lineage matches hatchRateAtF() within the design band', () => {
+    // The one that runs the actual game. It breeds founders, breeds their offspring back to each
+    // other, and reads the *engine's* non-viable probability for that pairing — the number that
+    // decides real eggs — rather than the model's.
+    //
+    // Averaged across lineages because a single family's answer depends on which three load
+    // alleles its two founders happened to draw, and the design band is a statement about the
+    // population, not about one family.
+    const session = new Session({ worldSeed: 'invariant-line-breeding', clutchSize: 6 })
+    const ratios: number[] = []
+
+    for (let lineage = 0; lineage < 40; lineage++) {
+      const dam = session.spawnRandom('ball-python')
+      const sire = session.spawnRandom('ball-python')
+      if (session.sexOf(dam) === session.sexOf(sire)) continue
+
+      const outcross = session.previewPairing(dam.individual.id, sire.individual.id)
+      if (!outcross.check.ok) continue
+      const clutch = session.breed(dam.individual.id, sire.individual.id)
+
+      const brother = clutch.find((r) => session.sexOf(r) === 'male')
+      const sister = clutch.find((r) => session.sexOf(r) === 'female')
+      if (!brother || !sister) continue
+
+      const sibs = session.previewPairing(sister.individual.id, brother.individual.id)
+      if (!sibs.check.ok) continue
+
+      ratios.push((1 - sibs.nonViableProbability) / (1 - outcross.nonViableProbability))
+    }
+
+    invariant(
+      ratios.length >= 6,
+      `Only ${ratios.length} lineages produced a full-sib pairing to measure. The test cannot say
+anything about inbreeding depression from that few; fix the fixture, not the band.`,
+    )
+
+    const mean = ratios.reduce((sum, r) => sum + r, 0) / ratios.length
+    const [min, max] = INBREEDING_HATCH_RATIO_BAND
+
+    invariant(
+      mean >= min && mean <= max,
+      `A full-sib pairing in the running game hatches ${round(mean * 100, 1)}% as many eggs as an
+outcross. The design band is ${min * 100}–${max * 100}%.
+
+This is the invariant that ties the genetic-load model to the animals the player actually breeds.
+Below the floor, line-breeding is punished so hard nobody will ever try it, and principle 3 stops
+being a trade-off and becomes a rule. Above the ceiling, inbreeding costs nothing and outcrossing
+is flavour text.
+
+The numbers underneath it are LOAD_POOL_SIZE and FOUNDER_LOAD_ALLELES in genetics/load.ts, and
+the extra-care split in game/loadPool.ts. hatchRateAtF() is the model of the same thing — if the
+two have drifted apart, that gap is the finding, not the failure.`,
+    )
+  })
 })
+
+/**
+ * P(a hatchling is homozygous for `allele` at `locus`), from the real engine.
+ *
+ * Written against `lociMarginals` rather than `phenotypes()` because it is asking a question
+ * about a genotype, and going via the visible phenotype would fold in every other locus's
+ * labelling — which is a different question with a different answer.
+ */
+function visibleProbability(
+  overrides: Readonly<Record<string, readonly [AllelePair, AllelePair]>>,
+  locusId: string,
+  dominant = false,
+): number {
+  const damOverrides: Record<string, AllelePair> = {}
+  const sireOverrides: Record<string, AllelePair> = {}
+  for (const [id, [dam, sire]] of Object.entries(overrides)) {
+    damOverrides[id] = dam
+    sireOverrides[id] = sire
+  }
+
+  const distribution = punnett(
+    {
+      id: 'dam',
+      species: ballPython.id,
+      genotype: makeGenotype(ballPython, 'female', damOverrides),
+      parents: null,
+      mutations: [],
+    },
+    {
+      id: 'sire',
+      species: ballPython.id,
+      genotype: makeGenotype(ballPython, 'male', sireOverrides),
+      parents: null,
+      mutations: [],
+    },
+    ballPython,
+    { loci: [locusId] },
+  )
+
+  const locus = ballPython.loci.find((l) => l.id === locusId)!
+  const variant = locus.alleles.find((a) => a.id !== locus.wildType)!.id
+  return (distribution.lociMarginals[locusId] ?? [])
+    .filter((w) => {
+      const copies = w.value.filter((slot): slot is string => slot !== null)
+      return dominant
+        ? copies.some((c) => c === variant)
+        : copies.length === 2 && copies.every((c) => c === variant)
+    })
+    .reduce((sum, w) => sum + w.probability, 0)
+}
+
+/** Carrier × carrier at one recessive locus, from the real engine. */
+function doubleCarrier(locusId: string): number {
+  const locus = ballPython.loci.find((l) => l.id === locusId)!
+  const variant = locus.alleles.find((a) => a.id !== locus.wildType)!.id
+  return visibleProbability(
+    { [locusId]: [[variant, locus.wildType], [variant, locus.wildType]] },
+    locusId,
+  )
+}
+
+/**
+ * Loci where a variant is invisible in one copy and visible in two — the definition of a simple
+ * recessive, read off the shipped expression tables rather than off a comment.
+ */
+function recessiveLoci(species: (typeof allSpecies)[number]): string[] {
+  return species.loci
+    .filter((locus) => {
+      if (locus.placement.kind !== 'autosomal') return false
+      if (locus.expression.kind !== 'table') return false
+      const variant = locus.alleles.find((a) => a.id !== locus.wildType)
+      if (!variant) return false
+      const het = locus.expression.entries[[locus.wildType, variant.id].sort().join('/')]
+      const wild = locus.expression.entries[[locus.wildType, locus.wildType].join('/')]
+      const homo = locus.expression.entries[[variant.id, variant.id].join('/')]
+      if (!het || !wild || !homo) return false
+      return JSON.stringify(het) === JSON.stringify(wild) && JSON.stringify(homo) !== JSON.stringify(wild)
+    })
+    .map((locus) => locus.id)
+}

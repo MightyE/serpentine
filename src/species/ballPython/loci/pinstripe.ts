@@ -1,5 +1,6 @@
 import type { Locus, TraitProjection } from '../../../genetics/types'
 import type { Phenotype } from '../../../render/contract'
+import { withLabel } from '../../support/phenotypeKey'
 import type { RealVsModeledNote } from '../../support/traitNotes'
 import { key } from '../../support/genotypeKey'
 
@@ -34,6 +35,7 @@ export const pinstripeProjection: TraitProjection<Phenotype> = {
   apply: (draft, value) => {
     if (value !== true) return
     Object.assign(draft, {
+      label: withLabel(draft.label, 'Pinstripe'),
       // The real `patternReduction` modifier (`render/stages/patternReduction.ts`) pulls
       // markings in toward the spine and clears the flanks — pushed almost all the way, this
       // is exactly a pinstripe.

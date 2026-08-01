@@ -349,11 +349,11 @@ describe('line-breeding and the outcross that reverses it', () => {
   it('stamps that coefficient onto the hatchlings themselves', () => {
     // Not a second calculation: the number read off a hatchling is the number the pre-pairing
     // warning showed for its parents, which is what makes the warning worth showing.
-    const [mother, father] = study.lines[0]!.closed
-    const clutch = study.colony.mate(mother, father, 8, 'confirmation-clutch')
+    const line = study.lines[0]!
+    const clutch = study.colony.mate(line.lineBred, line.brother, 8, 'confirmation-clutch')
     expect(clutch.hatched.length).toBeGreaterThan(0)
     for (const hatchling of clutch.hatched) {
-      expect(inbreedingCoefficient(hatchling, study.colony.lookup)).toBe(0.5)
+      expect(inbreedingCoefficient(hatchling, study.colony.lookup)).toBe(line.closedF)
     }
   })
 
@@ -367,44 +367,47 @@ describe('line-breeding and the outcross that reverses it', () => {
   })
 
   it('recovers completely, in one generation, in every single line', () => {
-    // The whole mechanic. The line-bred female is unchanged — she still carries every load
-    // allele she inherited. All that changed is who she was paired with, and because the
-    // unrelated sire's load was drawn from a pool of sixty, none of it lines up with hers.
+    // The whole mechanic, and the same female on both sides of it. She is unchanged — she still
+    // carries every load allele she inherited. All that changed is who she was paired with, and
+    // because the unrelated sire's load was drawn from a pool of sixty, none of it lines up
+    // with hers.
     for (const line of study.lines) {
+      expect(line.closedF).toBe(0.59375)
       expect(line.outcrossF).toBe(0)
       expect(line.outcrossHatchProbability).toBe(1)
+      expect(line.outcrossHatchProbability).toBeGreaterThanOrEqual(line.closedHatchProbability)
     }
-    expect(mean(study.lines.map((l) => l.outcrossHatchProbability))).toBeGreaterThan(mean(at(3)))
+    expect(mean(study.lines.map((l) => l.outcrossHatchProbability))).toBeGreaterThan(
+      mean(study.lines.map((l) => l.closedHatchProbability)),
+    )
   })
 
   it('behaves that way in real eggs, not just in the arithmetic', () => {
-    // Take the worst-affected line and actually lay both clutches.
+    // Take the worst-affected line and actually lay both clutches, from the same female.
     const worst = [...study.lines].sort(
-      (a, b) => a.hatchProbability[3]! - b.hatchProbability[3]!,
+      (a, b) => a.closedHatchProbability - b.closedHatchProbability,
     )[0]!
-    const [mother, father] = worst.closed
 
-    const closedClutch = study.colony.mate(mother, father, 200, 'sampled:closed')
-    const outcrossClutch = study.colony.mate(mother, worst.unrelated, 200, 'sampled:outcross')
+    const closedClutch = study.colony.mate(worst.lineBred, worst.brother, 200, 'sampled:closed')
+    const outcrossClutch = study.colony.mate(worst.lineBred, worst.unrelated, 200, 'sampled:outcross')
 
     expect(closedClutch.unhatched.length).toBeGreaterThan(0)
-    expect(closedClutch.unhatched.every((e) => /masked by a wild-type copy/.test(e.explanation))).toBe(true)
+    expect(
+      closedClutch.unhatched.every((e) => /masked by a wild-type copy/.test(e.explanation)),
+    ).toBe(true)
     expect(outcrossClutch.unhatched).toEqual([])
-    expect(outcrossClutch.hatched.length / 200).toBeGreaterThan(closedClutch.hatched.length / 200)
+    expect(outcrossClutch.hatched.length).toBeGreaterThan(closedClutch.hatched.length)
   })
 
   it('produces hatchlings that need extra care, who hatch and stay', () => {
     // The other outcome, and the one the rehab framing is built around: these animals are here,
     // they are fine, and they are the reason the place exists.
-    const worst = [...study.lines].sort(
-      (a, b) => a.hatchProbability[3]! - b.hatchProbability[3]!,
-    )[0]!
-    const [mother, father] = worst.closed
-    const clutch = study.colony.mate(mother, father, 200, 'sampled:extra-care')
+    const residents = study.colony
+      .everyone()
+      .filter((animal) =>
+        expressedLoad(animal, study.pool).some((e) => e.outcome === 'needsExtraCare'),
+      )
 
-    const residents = clutch.hatched.filter((h) =>
-      expressedLoad(h, study.pool).some((e) => e.outcome === 'needsExtraCare'),
-    )
     expect(residents.length).toBeGreaterThan(0)
   })
 
@@ -412,8 +415,8 @@ describe('line-breeding and the outcross that reverses it', () => {
     // The honest half of the story, and why line-breeding stays a decision rather than a mistake
     // you can undo: outcrossing masks the load, it does not remove it. Bred back into the line,
     // the same alleles pair up again.
-    const worst = study.lines[0]!
-    const clutch = study.colony.mate(worst.closed[0], worst.unrelated, 40, 'sampled:carriers')
+    const line = study.lines[0]!
+    const clutch = study.colony.mate(line.lineBred, line.unrelated, 40, 'sampled:carriers')
     const carriers = clutch.hatched.filter((h) =>
       study.pool.entries.some((entry) => isCarrierOf(h, entry)),
     )
@@ -495,10 +498,10 @@ describe('source guards', () => {
       ...filesUnder(join(src, 'species')),
       ...filesUnder(join(src, 'render')),
     ]
+    const declaredHere = [join(src, 'genetics', 'load.ts'), join(src, 'genetics', 'load.test.ts')]
     const offenders = engineFiles.filter(
       (file) =>
-        !file.endsWith('load.ts') &&
-        !file.endsWith('load.test.ts') &&
+        !declaredHere.includes(file) &&
         new RegExp('\\b' + 'vigor' + '\\b', 'i').test(readFileSync(file, 'utf8')),
     )
 

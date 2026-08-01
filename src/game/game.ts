@@ -40,7 +40,7 @@ export function createGame(worldSeed: string, options: CreateGameOptions = {}): 
     flags: createFlagSet(bus, options.flags),
     unlocks: createUnlockRegistry(),
     roster: options.roster ?? createRoster(),
-    economy: createEconomy(bus, options.startingBalance ?? 500),
+    economy: createEconomy(bus, options.startingBalance),
     careLog: options.careLog ?? {},
     worldSeed,
   }

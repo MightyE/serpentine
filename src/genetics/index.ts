@@ -56,6 +56,28 @@ export {
 } from './genotype'
 export { inferKnowledge } from './knowledge'
 export {
+  ancestors,
+  inbreedingCoefficient,
+  kinship,
+  pedigreeDepth,
+  DEFAULT_PEDIGREE_DEPTH,
+  type PedigreeLookup,
+} from './pedigree'
+export {
+  expressedLoad,
+  loadLocus,
+  loadViabilityRules,
+  seedFounderLoad,
+  FOUNDER_LOAD_ALLELES,
+  LOAD_POOL_SIZE,
+  type GeneticLoadPool,
+  type LoadAllele,
+  type LoadOutcome,
+} from './load'
+// `load.ts`'s display readout is deliberately NOT re-exported here: `load.test.ts` asserts that
+// no file under `src/genetics/`, `src/species/` or `src/render/` so much as names it, so that it
+// can never quietly acquire an engine-side caller. The UI imports it from `@/genetics/load`.
+export {
   allelesAt,
   applyMutation,
   discoveredAlleleRecords,

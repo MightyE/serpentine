@@ -27,6 +27,7 @@ import { toCss, mix, rgba } from './colour'
 import { effectsFor, totalDrift, type EffectDefinition, type EffectDrawContext } from './effects'
 import { add, distance, perp, scale, vec, type ControlPoint, type Vec2 } from './geometry'
 import { drawFace } from './head'
+import { drawUpturnedSnout } from './snout'
 import { buildRibbon, traceRibbon, paintRibbon, type Ribbon } from './ribbon'
 import { coilPose, visualSpine, DEFAULT_WAVE, Spine, type WaveParams } from './spine'
 import { patternTextureFor, type PatternTexture } from './texture'
@@ -163,6 +164,7 @@ export class SnakeView {
     drawRoundness(ctx, ribbon, this.phenotype)
     for (const effect of this.effects) effect.drawOver?.(effectCtx)
     drawFace(ctx, ribbon, this.phenotype, { blink: this.blink, tongue: this.tongue })
+    drawUpturnedSnout(ctx, ribbon, this.phenotype)
   }
 
   /** Where the head currently is — handy for debug overlays and hit-testing. */

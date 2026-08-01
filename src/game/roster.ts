@@ -12,6 +12,20 @@ export interface SnakeRecord {
   readonly name: string
   readonly acquiredTurn: number
   readonly source: AcquisitionSource
+  /**
+   * Wright's `F`, computed **once, at hatch**, against the pedigree as it stood then.
+   *
+   * `genetics/pedigree.ts` deliberately adds no field to `Individual` — the engine states `F`
+   * as a function of a pedigree, and the game layer is the thing that owns a pedigree. Storing
+   * it here means the number on the animal's card is the number that was true when it hatched,
+   * which is also the number `kinship(dam, sire)` showed before the pairing was committed.
+   *
+   * Absent on a founder or a purchased animal: those have no known parents, so `F` is 0 by
+   * definition and there is nothing to record.
+   */
+  readonly inbreeding?: number
+  /** Load alleles this animal is homozygous for, by locus id — see `genetics/load.ts`. */
+  readonly expressedLoad?: readonly string[]
 }
 
 export interface Roster {

@@ -36,6 +36,7 @@ import { patternTextureFor, type PatternTexture } from '../texture'
 import { hashSeed, makeRng, type Rng } from '../../lib/rng'
 import { clamp01 } from '../colour'
 import { drawLifeFace } from './face'
+import { drawUpturnedSnout } from '../snout'
 import { paintBody } from './paint'
 import { lifeShapeAtAge, motionAtAge, ratioMaturity, type LifeMotion } from './stage'
 
@@ -210,6 +211,7 @@ export class LifeSnakeView {
     paintBody(ctx, ribbon, this.phenotype, this.texture, this.drift * this.time)
     for (const effect of this.effects) effect.drawOver?.(effectCtx)
     drawLifeFace(ctx, ribbon, this.phenotype, { blink: this.blink, tongue: this.tongue }, this.age)
+    drawUpturnedSnout(ctx, ribbon, this.phenotype)
   }
 
   get headPosition(): Vec2 {

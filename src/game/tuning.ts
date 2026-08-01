@@ -541,3 +541,274 @@ export function salePrice(tier: number, unitsAlreadySold: number, vigor: number)
  * Purely cosmetic; the flag is what matters.
  */
 export const CHEAT_USE_DISPLAY_CAP = 99
+
+// ===========================================================================
+// FACILITY, HUSBANDRY, INFORMATION, REPUTATION
+// ===========================================================================
+//
+// Merged in from `progression/tuningProposals.ts`, which was a staging area created only because
+// three agents were editing this file at once. The rule it was staging against is the reason it
+// could not stay: every number that shapes difficulty lives in exactly one file, or the
+// invariants in `tuning.test.ts` are protecting half a design.
+//
+// The design reasoning behind this section is in `docs/economy-design.md` and
+// `docs/progression-design.md`. Read those before changing anything here; the numbers are the
+// cheap part.
+
+// ===========================================================================
+// FACILITY — principle 7 (the rehab competes for capacity, never conscience)
+// ===========================================================================
+//
+// A problem with the shipped constants, stated plainly because it should be argued with rather
+// than quietly patched: at a flat `SLOT_PURCHASE_COST` of 350, one tier-3 sale (1600) buys four
+// enclosures. Capacity pressure is therefore real for the first hour and gone by mid-game — and
+// capacity pressure is the *entire* mechanism principle 7 relies on to make taking an animal in a
+// genuine decision. A principle whose mechanism expires is a principle that expires.
+//
+// The fix is not to make slots more expensive (that hurts most where the pressure already
+// works). It is to make *space itself* come in blocks, the way it really does: you do not buy a
+// seventh rack, you rent a bigger room. Each expansion is a step change, and the steps get
+// steeper.
+
+/**
+ * Enclosure slots available at each facility tier: a spare bedroom, a garage, a converted unit,
+ * a small commercial space. Index = tier.
+ */
+export const FACILITY_SLOTS_BY_TIER: readonly number[] = [6, 14, 30, 60]
+
+/**
+ * Cost to move up to each tier. Index 0 is free (you start there).
+ *
+ * Superlinear on purpose: roughly 2.5× per step against a market whose per-morph income is
+ * bounded by saturation. That is what keeps space scarce at year twenty as well as at week one,
+ * and it is why the answer to "I need more room" stays "produce something the market has not
+ * seen" rather than "sell six more normals".
+ */
+export const FACILITY_TIER_COST: readonly number[] = [0, 4_000, 11_000, 30_000]
+
+/** Weekly facility upkeep per tier. Bigger space, bigger bill. Principle 5. */
+export const FACILITY_UPKEEP_BY_TIER: readonly number[] = [8, 22, 55, 130]
+
+// ===========================================================================
+// ENCLOSURES — principles 3, 7 (convenience may be strictly good; capacity is the cost)
+// ===========================================================================
+//
+// Four types, and they are deliberately NOT a ladder. A rack is the best capacity per pound and
+// always will be; a display vivarium is where the habitat renderer actually shows you an animal
+// and where provisions do anything. The choice between throughput and the thing you built the
+// game to look at is the storefront's core tension, and neither answer is wrong.
+
+export type EnclosureTypeId = 'rack-slot' | 'tub' | 'vivarium' | 'display'
+
+export interface EnclosureType {
+  readonly id: EnclosureTypeId
+  readonly label: string
+  /** How many slots of facility space it occupies. */
+  readonly footprint: number
+  /** How many animals it can hold. Racks hold hatchlings; a display holds one adult. */
+  readonly capacity: number
+  /** Life stages it may house. A hatchling in a display enclosure is a welfare problem, not a treat. */
+  readonly stages: readonly ('hatchling' | 'juvenile' | 'adult')[]
+  readonly cost: number
+  readonly upkeepPerWeek: number
+  /** How many provisions (features) may be installed. Racks take none; that is the trade. */
+  readonly featureSlots: number
+  /** Whether the habitat renderer draws this enclosure at all. Principle: the reward is seeing it. */
+  readonly rendered: boolean
+}
+
+export const ENCLOSURE_TYPES: readonly EnclosureType[] = [
+  {
+    id: 'rack-slot',
+    label: 'Rack slot',
+    footprint: 1,
+    capacity: 4,
+    stages: ['hatchling', 'juvenile'],
+    cost: Math.round(SLOT_PURCHASE_COST * 0.35),
+    upkeepPerWeek: SLOT_UPKEEP_PER_WEEK * 0.5,
+    featureSlots: 0,
+    rendered: false,
+  },
+  {
+    id: 'tub',
+    label: 'Tub',
+    footprint: 1,
+    capacity: 1,
+    stages: ['juvenile', 'adult'],
+    cost: SLOT_PURCHASE_COST,
+    upkeepPerWeek: SLOT_UPKEEP_PER_WEEK,
+    featureSlots: 1,
+    rendered: true,
+  },
+  {
+    id: 'vivarium',
+    label: 'Vivarium',
+    footprint: 2,
+    capacity: 1,
+    stages: ['juvenile', 'adult'],
+    cost: SLOT_PURCHASE_COST * 3,
+    upkeepPerWeek: SLOT_UPKEEP_PER_WEEK * 2,
+    featureSlots: 3,
+    rendered: true,
+  },
+  {
+    id: 'display',
+    label: 'Display habitat',
+    footprint: 4,
+    capacity: 1,
+    stages: ['adult'],
+    cost: SLOT_PURCHASE_COST * 8,
+    upkeepPerWeek: SLOT_UPKEEP_PER_WEEK * 4,
+    featureSlots: 6,
+    rendered: true,
+  },
+]
+
+// ===========================================================================
+// PROVISIONS — one model for biomes and features (anticipates the habitat work)
+// ===========================================================================
+//
+// A biome is a bundle of provisions; a feature is a single one. Same type, same axes, same
+// effects channel — so the habitat renderer has one list to read and the game has one number to
+// compute. Two systems here would have been the obvious mistake.
+
+export const PROVISION_AXES = [
+  'humidity',
+  'thermalGradient',
+  'cover',
+  'climbing',
+  'substrateDepth',
+  'enrichment',
+] as const
+export type ProvisionAxis = (typeof PROVISION_AXES)[number]
+
+/**
+ * Baseline provision level. A plain tub with a hide and correct temperatures sits here, and
+ * **baseline is fully adequate** — no animal is ever harmed by being housed plainly.
+ *
+ * That is a tone decision with teeth: husbandry in this game is a bonus system, never a penalty
+ * system. Provisions above baseline earn you something; the game simply refuses a placement that
+ * would fall below it, rather than accepting it and quietly hurting an animal. Nothing in this
+ * repo models an animal suffering, and husbandry is exactly where that rule would be easiest to
+ * break by accident.
+ */
+export const PROVISION_BASELINE = 0.5
+
+/**
+ * How much a perfect match may shorten the receptivity window, as a share of its range.
+ *
+ * Principle 6: this narrows a *published* range, it never hides one. Principle 1: the benefit is
+ * a scheduling benefit — you are more likely to fit the pairing inside the season — which is the
+ * only kind of time benefit this game is allowed to sell.
+ */
+export const HUSBANDRY_RECEPTIVITY_SHARE = 0.4
+
+/**
+ * Maximum bonus to resident support from a visibly excellent enclosure, as a fraction.
+ *
+ * Capped hard, and the cap has a reason: a resident must remain net-negative in money at every
+ * reachable combination (principles 5 and 7), and this stacks with the talent-tree band in
+ * `progression/tunables.ts`. Whatever else changes, the assertion in `residentNetPerWeek` is what
+ * must survive.
+ */
+export const HUSBANDRY_SUPPORT_BONUS_MAX =
+  (RESIDENT_CARE_PER_WEEK + SLOT_UPKEEP_PER_WEEK - RESIDENT_SUPPORT_PER_WEEK) /
+  RESIDENT_SUPPORT_PER_WEEK /
+  2
+
+/** How much of the extra-care multiplier a well-provisioned enclosure offsets. Principle 7. */
+export const EXTRA_CARE_MITIGATION_MAX = 0.4
+
+// ===========================================================================
+// PURCHASABLES — principles 2, 3 (information is the reward; convenience may be free)
+// ===========================================================================
+
+/**
+ * Cost to test one locus on one animal. The charter explicitly permits buying a fact.
+ *
+ * Priced against the tier-2 animal it typically informs: about two-thirds of one sale. The point
+ * is that it hurts — the *alternative* to a gene test is a test breeding, which costs no money
+ * and instead costs a pairing slot and a season. Money or a season, and which is scarcer changes
+ * as you go. That is the best decision in the shop and it should stay tight.
+ */
+export const GENE_TEST_COST = Math.round(BASE_PRICE_BY_TIER[1] * 0.65)
+
+/**
+ * Multiplier for testing every locus at once, relative to `GENE_TEST_COST × loci`.
+ *
+ * Above 1: a full panel is deliberately *worse per fact* than a targeted test. Bulk discounts on
+ * information would let money replace the judgment about which question to ask — and principle 2
+ * says the one thing that can never be bought is which pairing to make. Choosing what to test is
+ * the same skill.
+ */
+export const FULL_PANEL_COST_MULTIPLIER = 1.4
+
+/** Reads `F` and the pedigree of an animal you did not breed. Cheap; it is public-record stuff. */
+export const PEDIGREE_AUDIT_COST = Math.round(BASE_PRICE_BY_TIER[1] * 0.3)
+
+/**
+ * Price multiplier for an animal whose carrier status is *proven* versus merely possible.
+ *
+ * Not a constant — a function, because the honest answer is already in the engine. A 66%
+ * possible het is worth about 66% of a proven one, because that is what a buyer is getting. This
+ * is the row in the economy that closes the loop: information is the reward (principle 2), and
+ * information is also the thing that pays.
+ *
+ * `liquidityDiscount` is the small extra haircut for uncertainty itself — buyers dislike variance
+ * beyond its expected value, which is real and is why proving a het before selling is worth doing.
+ */
+export function provenPriceMultiplier(carrierProbability: number, liquidityDiscount = 0.9): number {
+  const p = Math.min(1, Math.max(0, carrierProbability))
+  return p >= 1 ? 1 : p * liquidityDiscount
+}
+
+/**
+ * Premium on stock advertised as unrelated to anything you own.
+ *
+ * Buying diversity is buying a real thing (see D3: outcrossing restores vigor in one generation),
+ * and it is the money-for-genetics conversion that keeps line-breeding a decision rather than a
+ * default. Priced above a same-morph animal because the seller knows what it is for.
+ */
+export const OUTCROSS_STOCK_PREMIUM = 1.6
+
+/**
+ * Reputation needed before the shop lists stock of each rarity tier. Index = tier − 1.
+ *
+ * This is the progressive-difficulty gate, and it is deliberately made of *achievements*, not of
+ * money or of time: reputation comes from what you have produced, proven, and placed. You cannot
+ * buy your way to better stock, which is what stops money from being the only axis in the game.
+ */
+export const REPUTATION_FOR_STOCK_TIER: readonly number[] = [0, 15, 60, 200]
+
+/** Reputation earned per event. Bounded per source so nothing here is farmable. Principle 8. */
+export const REPUTATION_AWARDS = {
+  /** First time you produce a given phenotype. Repeats of the same morph award nothing. */
+  novelPhenotypeProduced: 8,
+  /** A locus proven by test breeding, once per animal per locus. */
+  genotypeProven: 3,
+  /** A rehab resident placed in a permanent home. */
+  residentPlaced: 5,
+  /** A new allele found. Once in a long playthrough, per `MUTATION_RATE_PER_ALLELE`. */
+  alleleDiscovered: 25,
+} as const
+
+// ===========================================================================
+// INVARIANTS THIS DISPATCH OWES `tuning.test.ts` — principle 4's standing obligation
+// ===========================================================================
+//
+// Adding a mechanic without adding it to the strategy model is how an invariant suite quietly
+// stops protecting the game. Three are owed, and the first is the important one:
+//
+// 1. **Portfolio rotation must be in the strategy model.** Saturation is keyed to a phenotype and
+//    recovers at `SATURATION_RECOVERY_PER_YEAR`, so a player cycling five morphs never saturates
+//    any of them — income scales with morph count, morph count scales with capacity, and the
+//    runaway loop principle 5 forbids reappears one level up. `ECONOMY_LATE_ACCELERATION_MAX`
+//    will not catch it if the model only simulates a single-morph strategy. Model it before
+//    patching it; the fix may turn out to be a shared saturation term across related phenotypes,
+//    but that should be a response to a failing test rather than a guess.
+// 2. **Money-for-information must not dominate breeding-for-information** at any horizon in
+//    `STRATEGY_HORIZONS_WEEKS`. A "buy every gene test" strategy that beats "run test breedings"
+//    everywhere would hollow out principle 2.
+// 3. **Capacity must still be scarce at week 1040.** Assert that facility slots remain a binding
+//    constraint at the end of the economy simulation — that is the checkable form of "principle 7
+//    still has a mechanism".
