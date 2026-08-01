@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Serpentine — life stages lab</title>
+    <style>
+      /*
+        A dev-only page, separate from /render-lab.html so that "is this hatchling reading as a
+        baby?" can be looked at without twelve other snakes moving around next to it. Vite serves
+        any .html at the project root, so this needs no config.
+      */
+      :root {
+        color-scheme: dark;
+      }
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background: #14161f;
+        color: #e8ecf4;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+      }
+      #lab {
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+      }
+      .toolbar {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        flex-wrap: wrap;
+        padding: 0.6rem 0.9rem;
+        border-bottom: 1px solid #262b3a;
+        background: #191d29;
+        position: sticky;
+        top: 0;
+        z-index: 2;
+      }
+      button,
+      select {
+        font: inherit;
+        font-size: 0.85rem;
+        padding: 0.35rem 0.7rem;
+        border-radius: 0.4rem;
+        border: 1px solid #39405a;
+        background: #222840;
+        color: #dfe5f2;
+        cursor: pointer;
+      }
+      button:hover,
+      select:hover {
+        background: #2c3352;
+      }
+      .status {
+        margin-left: auto;
+        font-size: 0.8rem;
+        color: #8f9ab5;
+        font-variant-numeric: tabular-nums;
+      }
+      section {
+        padding: 0.9rem 1rem 1.4rem;
+        border-bottom: 1px solid #212634;
+      }
+      h2 {
+        margin: 0 0 0.15rem;
+        font-size: 0.95rem;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+      }
+      p.note {
+        margin: 0 0 0.7rem;
+        font-size: 0.78rem;
+        line-height: 1.45;
+        color: #8f9ab5;
+        max-width: 62ch;
+      }
+      canvas {
+        width: 100%;
+        display: block;
+        border-radius: 0.5rem;
+        background: rgba(255, 255, 255, 0.03);
+      }
+      .controls {
+        display: flex;
+        align-items: center;
+        gap: 0.7rem;
+        margin: 0.55rem 0 0.2rem;
+        flex-wrap: wrap;
+      }
+      input[type='range'] {
+        flex: 1;
+        min-width: 220px;
+        accent-color: #7fb8ff;
+      }
+      .readout {
+        font-size: 0.76rem;
+        color: #9aa4bd;
+        font-variant-numeric: tabular-nums;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.15rem 1.4rem;
+        margin-top: 0.5rem;
+      }
+      .readout b {
+        color: #d7deee;
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="lab"></div>
+    <script type="module" src="/src/render/life/lab/main.ts"></script>
+  </body>
+</html>

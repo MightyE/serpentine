@@ -290,14 +290,17 @@ function eggToWorld(local: Vec2, geom: EggGeometry): Vec2 {
 /**
  * The path the emerging hatchling lies along, head **first** in the returned array.
  *
- * A fixed curve that the head travels down, and the body simply lies along behind it — which is
- * exactly how a follow-the-leader spine behaves, without needing a simulation for a
- * six-second clip. The curve starts at the tear pointing up and out, then tightens into just
- * over a turn, so the animal ends up curled next to its own shell rather than shooting off the
- * side of the frame.
+ * A **fixed** curve that the head travels down, with the body lying along behind it — which is
+ * what a follow-the-leader spine does anyway, without needing a simulation for a six-second
+ * clip. Fixed is load-bearing: parameterising the curve by the *revealed* fraction instead of by
+ * absolute arc length makes the shape rewrite itself every frame, and the animal appears to
+ * writhe rather than to emerge.
  *
- * Curvature ramps as `t^1.7`: near-straight while the head is getting clear (it has to push
- * *away* from the shell to get out), tightening once there is body to coil.
+ * Curvature is concentrated **near the shell** and dies away toward the head. That is the right
+ * way round and it took getting wrong to see why: put the curvature at the head end and the
+ * animal comes out spiralling nose-first, like something being wound onto a reel. Put it at the
+ * shell end and you get the hook that hatchlings actually make — body draped over the torn edge,
+ * head out and pointed away from the egg.
  */
 export function emergePath(
   geom: EggGeometry,
@@ -313,14 +316,19 @@ export function emergePath(
   if (arc < 1) return []
   const steps = Math.max(6, Math.round(48 * clamp01(revealed)))
   const ds = arc / steps
-  const totalTurn = Math.PI * 2 * 1.22
+  // Just under half a turn, spent over the first 60% of the body. Tuned by looking: a full
+  // revolution puts the coil radius below the body's own width, the animal overlaps itself, and
+  // a newborn snake reads as a cinnamon bun.
+  const totalTurn = Math.PI * 2 * 0.45
 
-  // Walk from the tear outward, then reverse so the head (the far end) comes first.
+  // Walk from the tear outward, then reverse so the head (the far end) comes first. `s` is a
+  // fraction of the *whole* body, not of what is out so far — that is what keeps the curve
+  // still in space while the animal slides along it.
   const forward: Vec2[] = [start]
   let p = start
   for (let i = 1; i <= steps; i++) {
-    const s = (i - 0.5) / steps
-    const theta = heading + totalTurn * Math.pow(s, 1.7)
+    const s = ((i - 0.5) * ds) / fullLength
+    const theta = heading + totalTurn * smoothstep(0, 0.6, s)
     p = add(p, vec(Math.cos(theta) * ds, Math.sin(theta) * ds))
     forward.push(p)
   }

@@ -166,9 +166,15 @@ export function lifeShapeOfStage(stage: LifeStage): LifeShape {
  * point: the eye grows *as a fraction of a head that itself grew as a fraction of the body*.
  * Baby eyes are close to adult size in absolute terms in real animals — they finish growing
  * first — which is exactly why they look so oversized on a small head.
+ *
+ * The ceiling was found by overshooting it. At 1.5 the eye is wider than the skull and hangs off
+ * both sides, and the effect is not "baby" — it is a googly eye stuck onto a snake, and it wipes
+ * out the head silhouette that the rest of the age work was for. 1.28 puts the outer edge of the
+ * eye just past the outline, which is where a real snake's eye sits and where the cue reads
+ * hardest. The head has to stay visible *underneath* the eye for the eye to be big *on* it.
  */
 export function eyeScaleAtAge(age: number): number {
-  return lerp(1.52, 1, ratioMaturity(age))
+  return lerp(1.28, 1, ratioMaturity(age))
 }
 
 /**
@@ -178,12 +184,13 @@ export function eyeScaleAtAge(age: number): number {
  * widest part of the cheek as the skull grows and shrinks along the body. The constant 0.477
  * is chosen so that an adult lands on exactly the 0.062 the original face code used.
  *
- * `v` widens for the young because two much larger eyes on a shorter head would otherwise
- * collide over the midline.
+ * `v` moves *inward* for the young — a bigger eye set at the adult's `v` hangs off the side of
+ * a shorter head. Pulling it in is also the truer cue: young animals of most species have more
+ * frontally set eyes, and frontal eyes are half of why a face reads as a face.
  */
 export function eyePlacementAtAge(age: number): { u: number; v: number } {
   const shape = lifeShapeAtAge(age)
-  return { u: shape.headSpan * 0.477, v: lerp(0.53, 0.46, ratioMaturity(age)) }
+  return { u: shape.headSpan * 0.477, v: lerp(0.4, 0.46, ratioMaturity(age)) }
 }
 
 /** A copy of an eye with its size scaled for an age. The colours are the animal's, untouched. */

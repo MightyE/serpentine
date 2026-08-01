@@ -31,10 +31,10 @@
  * ## The two outcomes, and the two that do not exist
  *
  * A homozygous load locus produces either an egg that does not hatch, or a hatchling that
- * **needs extra care** and becomes a resident of the rehab. Those are the only two. There is no
- * death, no culling, no disposal, and no health that decays over time — not in this file, not in
- * any file, and not in an identifier or a comment. See `viability.ts` for the same rule stated
- * from the other side.
+ * **needs extra care** and becomes a resident of the rehab. Those are the only two. Nothing here
+ * harms a living animal: there is no third outcome, no disposal, and no health that decays over
+ * time — not in this file, not in any file, and not in an identifier or a comment. See
+ * `viability.ts` for the same rule stated from the other side.
  */
 
 import { makeRng } from '../lib/rng'

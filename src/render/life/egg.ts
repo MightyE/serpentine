@@ -143,27 +143,31 @@ export function eggShellFor(phenotype: Phenotype): EggShell {
  */
 export function drawNest(ctx: CanvasRenderingContext2D, geom: EggGeometry): void {
   const { centre, length } = geom
-  const rx = length * 0.86
-  const ry = length * 0.42
+  // Kept close to the egg's own footprint. A wider dip looks fine under a plump egg and turns
+  // into a dark ring around a *spent* one, which reads as a bowl rather than as a nest.
+  const rx = length * 0.62
+  const ry = length * 0.3
 
   ctx.save()
-  ctx.translate(centre.x, centre.y + length * 0.2)
+  ctx.translate(centre.x, centre.y + length * 0.14)
 
   // The depression: dark in the middle, fading out — a dip, not a disc.
   const dip = ctx.createRadialGradient(0, 0, length * 0.06, 0, 0, rx)
-  dip.addColorStop(0, 'rgba(28, 22, 18, 0.42)')
-  dip.addColorStop(0.55, 'rgba(34, 27, 21, 0.2)')
+  dip.addColorStop(0, 'rgba(28, 22, 18, 0.3)')
+  dip.addColorStop(0.55, 'rgba(34, 27, 21, 0.15)')
   dip.addColorStop(1, 'rgba(40, 32, 25, 0)')
   ctx.fillStyle = dip
   ctx.beginPath()
   ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2)
   ctx.fill()
 
-  // A rim of pushed-up substrate on the far side, catching the light.
-  ctx.strokeStyle = 'rgba(255, 244, 224, 0.07)'
+  // A rim of pushed-up substrate catching the light. A *closed* ellipse, not an arc: an arc's
+  // two cut ends stick out past the egg and read as whiskers, which is a very silly way for an
+  // egg to look.
+  ctx.strokeStyle = 'rgba(255, 244, 224, 0.055)'
   ctx.lineWidth = Math.max(1, length * 0.03)
   ctx.beginPath()
-  ctx.ellipse(0, -ry * 0.16, rx * 0.82, ry * 0.86, 0, Math.PI * 1.08, Math.PI * 1.92)
+  ctx.ellipse(0, -ry * 0.1, rx * 0.72, ry * 0.8, 0, 0, Math.PI * 2)
   ctx.stroke()
   ctx.restore()
 }
@@ -396,9 +400,9 @@ function drawCollapse(ctx: CanvasRenderingContext2D, shell: EggShell, geom: EggG
   const half = geom.length / 2
   const b = half / shell.elongation
   ctx.save()
-  ctx.globalAlpha = 0.3 * amount
-  ctx.strokeStyle = toCss(mix(shell.shellColour, shell.shadowColour, 0.85))
-  ctx.lineWidth = Math.max(0.8, geom.length * 0.014)
+  ctx.globalAlpha = 0.55 * amount
+  ctx.strokeStyle = toCss(mix(shell.shellColour, shell.shadowColour, 0.95))
+  ctx.lineWidth = Math.max(0.8, geom.length * 0.02)
   ctx.beginPath()
   for (const at of [-0.42, -0.05, 0.36]) {
     const top = toWorld({ x: half * at, y: -b * 0.9 }, geom)

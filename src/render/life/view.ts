@@ -64,7 +64,14 @@ export class LifeSnakeView {
   pose: LifePose
 
   private readonly bounds: Rect
-  private readonly spine: Spine
+  /**
+   * Not `readonly`, and that is the whole subtlety of this class. `Spine.segLength` is fixed at
+   * construction and its constraint solver enforces it every tick, so an animal that grew would
+   * have its new spacing yanked straight back to the old one — the pose and the solver fight,
+   * points pile up, and the ribbon's rails cross into confetti. Growing therefore means a *new*
+   * `Spine`, seeded with the resampled points of the old one.
+   */
+  private spine: Spine
   private readonly texture: PatternTexture
   private readonly effects: readonly EffectDefinition[]
   private readonly drift: number
@@ -148,7 +155,9 @@ export class LifeSnakeView {
     const seg = bodyLength(this.phenotype.body, shape) / (this.count - 1)
     if (Math.abs(seg - this.segLength) > 1e-6) {
       const resampled = resamplePath(this.spine.points, this.count, seg)
-      for (let i = 0; i < this.count; i++) this.spine.points[i] = resampled[i]
+      const grown = new Spine(resampled[0], this.count, seg, this.spine.heading)
+      for (let i = 0; i < this.count; i++) grown.points[i] = resampled[i]
+      this.spine = grown
       this.segLength = seg
       const centre = vec(
         this.bounds.x + this.bounds.width / 2,
@@ -322,15 +331,16 @@ export function sCurvePose(bounds: Rect, count: number, segLength: number): Vec2
   const total = segLength * (count - 1)
   const amplitude = Math.min(bounds.height * 0.2, total * 0.13)
   const period = total / 1.6
-  const out: Vec2[] = []
 
-  // Walk a sine curve, stepping in x by whatever keeps the arc-length step at segLength.
-  let x = 0
-  for (let i = 0; i < count; i++) {
-    out.push(vec(x, Math.sin((x / period) * Math.PI * 2) * amplitude))
-    const slope = ((amplitude * Math.PI * 2) / period) * Math.cos((x / period) * Math.PI * 2)
-    x += segLength / Math.hypot(1, slope)
+  // Sample the sine finely, then resample by arc length. Stepping in `x` directly would space
+  // the points unevenly — tighter where the curve is steep — and unevenly spaced points on a
+  // fixed-link spine fight the constraint solver and make the pose jitter.
+  const dense: Vec2[] = []
+  const step = segLength / 8
+  for (let x = 0; x <= total * 1.1; x += step) {
+    dense.push(vec(x, Math.sin((x / period) * Math.PI * 2) * amplitude))
   }
+  const out = resamplePath(dense, count, segLength)
 
   // Centre the result in the box, head to the left.
   let minX = Infinity
