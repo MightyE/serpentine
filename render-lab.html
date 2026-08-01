@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Serpentine — render lab</title>
+    <style>
+      /*
+        A dev-only page. Vite serves any .html at the project root, so this needs no config and
+        does not affect the real game at index.html.
+      */
+      :root {
+        color-scheme: dark;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #14161f;
+        color: #e8ecf4;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+      }
+      #lab {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+      }
+      .toolbar {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        padding: 0.6rem 0.9rem;
+        border-bottom: 1px solid #262b3a;
+        background: #191d29;
+      }
+      .toolbar button {
+        font: inherit;
+        font-size: 0.85rem;
+        padding: 0.35rem 0.7rem;
+        border-radius: 0.4rem;
+        border: 1px solid #39405a;
+        background: #222840;
+        color: #dfe5f2;
+        cursor: pointer;
+      }
+      .toolbar button:hover {
+        background: #2c3352;
+      }
+      .status {
+        margin-left: auto;
+        font-size: 0.8rem;
+        color: #8f9ab5;
+        font-variant-numeric: tabular-nums;
+      }
+      .stage {
+        flex: 1;
+        width: 100%;
+        display: block;
+      }
+      .portraits {
+        flex: 1;
+        overflow: auto;
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+        align-content: start;
+        align-items: start;
+        gap: 1rem;
+        padding: 1rem;
+      }
+      .portraits figure {
+        margin: 0;
+        background: rgba(255, 255, 255, 0.04);
+        border-radius: 0.6rem;
+        padding: 0.5rem;
+      }
+      .portraits canvas {
+        width: 100%;
+        height: auto;
+        display: block;
+      }
+      .portraits figcaption {
+        font-size: 0.78rem;
+        color: #9aa4bd;
+        padding-top: 0.4rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="lab"></div>
+    <script type="module" src="/src/render/lab/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,34 @@
+Copyright (c) 2026. All rights reserved.
+
+SOURCE-AVAILABLE — ALL RIGHTS RESERVED
+
+The source code in this repository is published so that it can be read.
+It is not open source, and no license to use it is granted.
+
+You MAY:
+  - View and read this source code.
+  - Reference or quote short excerpts for commentary, review, or discussion,
+    with attribution.
+
+You MAY NOT, without prior written permission from the copyright holder:
+  - Use this software, in whole or in part, for any purpose.
+  - Copy, reproduce, or redistribute it.
+  - Modify it or create derivative works from it.
+  - Incorporate any part of it into another project, commercial or otherwise.
+  - Train machine learning models on it.
+
+No warranty of any kind is provided. The software is made available "as is",
+without warranty of any kind, express or implied, including but not limited to
+the warranties of merchantability, fitness for a particular purpose, and
+non-infringement. In no event shall the copyright holder be liable for any
+claim, damages, or other liability arising from the software or its use.
+
+This is a deliberately restrictive license chosen for an early-stage personal
+project. Permissions may be broadened later; they will not be narrowed for
+anything already published under a more permissive license.
+
+For permission to use this software, contact the copyright holder.
+
+Note: GitHub's Terms of Service grant other GitHub users the ability to view
+and fork public repositories hosted on GitHub. That is a condition of hosting
+here and is not an additional grant by the copyright holder beyond it.
