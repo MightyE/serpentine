@@ -29,7 +29,7 @@ export function CheatPanel({ session, selected }: { session: Session; selected?:
   }
 
   return (
-    <div className="cheats">
+    <div className="cheats panel">
       <h3>The lab notebook</h3>
       <p className="muted small">
         Cheats act on this game, not a copy — a sandbox that cannot touch the real game cannot be

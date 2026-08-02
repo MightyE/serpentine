@@ -1,0 +1,292 @@
+/*
+ * Serpentine — design tokens. The single source of truth for how the game looks.
+ *
+ * ## Why this file exists
+ *
+ * The first version of this UI was cream panels, sage pills and thin neutral sans: a compliance
+ * dashboard wearing a snake costume. It got that way because every screen picked its own colours
+ * and its own sizes, so "the look" was an emergent average of five files rather than a decision
+ * anybody made. **This file is what stops that happening again.**
+ *
+ * The rule, and it is not a soft one: every colour, size, radius, shadow, duration and easing in
+ * `src/ui/` references a token from here. If a component needs a value that is not in this file,
+ * the value belongs in this file — not inline. Then changing the game's whole aesthetic is one
+ * edit in one place, which is the only way an aesthetic survives contact with later agents.
+ *
+ * Where the rule stops, stated so nobody has to guess: a *named colour or reusable surface* is
+ * always a token. The per-element mechanics of a single effect — a mask's gradient stops, the
+ * alpha on one hairline inside a card, a shadow's blur radius — stay inline, because naming them
+ * (`--mask-stop-46%`) would add a lookup without adding a decision. If you find yourself using a
+ * value in two places, that is the signal it was a decision, and it becomes a token.
+ *
+ * ## The direction, in one paragraph
+ *
+ * Deep near-black field. Full-spectrum neon wordmark. Jewel-toned tiers escalating to a gold
+ * Legendary. Monospace with generous letter-spacing for every control label, small-caps heading
+ * and data readout — the type does the "precision instrument" work so the colour is free to be
+ * loud. Reference energy: a well-made trading card. Precise, confident, a little precious about
+ * its own craft. Deliberately not gendered — no pink/blue split, no soft-versus-powerful axis;
+ * the whole palette is saturated and the snake is the emotional centre.
+ *
+ * Ported from the Claude Design prototype `serpentine-cards.html`, which is the canonical
+ * reference for anything not spelled out here.
+ */
+
+:root {
+  color-scheme: dark;
+
+  /* ==========================================================================
+     FIELD — the near-black the whole game sits on
+     ========================================================================== */
+  --bg: #0b0910;
+  --bg-2: #14101d;
+  --bg-3: #191426;
+  --bg-sunk: #0a0710; /* inside an art window, inside a well */
+
+  /* The page's own backdrop: two coloured pools over the flat field, so the black
+     is never a flat black. Used by `body`. */
+  --field: radial-gradient(120% 80% at 50% -10%, #1c1430 0%, transparent 60%),
+    radial-gradient(80% 60% at 100% 100%, #0e1a26 0%, transparent 60%), var(--bg);
+
+  /* ==========================================================================
+     INK — text, in three weights of presence
+     ========================================================================== */
+  --ink: #f2eef7;
+  --ink-dim: #a79db8; /* labels, units, secondary readouts */
+  --ink-faint: #6f6683; /* placeholder, disabled, "nothing here yet" */
+  --ink-on-bright: #0d0a12; /* text on a jewel-filled chip */
+  --ink-on-accent: #ffffff; /* text on a saturated gradient button */
+  --ink-flavour: #cfc6dc; /* the italic note at the foot of a card */
+
+  /* ==========================================================================
+     JEWELS — the whole palette. Six saturated hues, no neutral accents.
+     ========================================================================== */
+  --jewel-emerald: #14d39a;
+  --jewel-cyan: #2fd2ff;
+  --jewel-sapphire: #4d7dff;
+  --jewel-amethyst: #b14dff;
+  --jewel-magenta: #ff2d95;
+  --jewel-gold: #ffc23d;
+  --jewel-gold-light: #ffe9ad; /* the lit end of a gold gradient */
+
+  /* Semantic assignments. Change the hue here, not at the call site. */
+  --accent: var(--jewel-amethyst); /* primary actions */
+  --accent-2: var(--jewel-magenta); /* the other half of a primary gradient */
+  --good: var(--jewel-emerald);
+  --warn: var(--jewel-gold);
+  --bad: var(--jewel-magenta);
+  --known: var(--jewel-emerald); /* PROVEN — you have evidence */
+  --unknown: var(--jewel-gold); /* INFERRED / HIDDEN — the hook, not a failure */
+
+  /* Rainbow, for the wordmark and anything that wants the full spectrum. */
+  --spectrum: linear-gradient(
+    100deg,
+    var(--jewel-emerald),
+    var(--jewel-cyan) 35%,
+    var(--jewel-amethyst) 65%,
+    var(--jewel-gold)
+  );
+
+  /* ==========================================================================
+     LINES & SURFACES — glass over the field, never a lighter grey box
+     ========================================================================== */
+  --line: rgba(255, 255, 255, 0.1);
+  --line-strong: rgba(255, 255, 255, 0.28);
+  --line-faint: rgba(255, 255, 255, 0.06);
+  --surface: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.012));
+  --surface-raised: linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.025));
+  --surface-sunk: rgba(6, 4, 10, 0.66);
+  --fill-soft: rgba(255, 255, 255, 0.05);
+  --fill-hover: rgba(255, 255, 255, 0.11);
+  --track: rgba(255, 255, 255, 0.07); /* the unfilled part of a meter */
+  --scrim: rgba(4, 3, 8, 0.82); /* behind a modal */
+
+  /* Card stock. The printed surfaces of a card, front to back — these are the darks the tier
+     colour is laid over, and they are decisions rather than incidental shading. */
+  --card-face-mid: #100c19;
+  --card-face-deep: #0b0812;
+  --card-gold-top: #241a10; /* the Legendary ground */
+  --card-gold-mid: #150f16;
+  --card-gold-deep: #0c0810;
+  --card-art-deep: #0f0b18; /* the far end of the art window's well */
+  --card-frame-shade: #2a2436; /* what a low-tier frame's hairline is mixed toward */
+  --card-art-shade: #2c2638;
+  --card-back-top: #2a1c47;
+  --card-back-mid: #150f22;
+  --card-back-deep: #0c0812;
+  --card-back-edge: #3a2f52;
+  --wrap-top: #2b2140; /* the sealed foil wrapper */
+  --wrap-mid: #191129;
+  --wrap-deep: #241a3a;
+
+  /* ==========================================================================
+     TIERS — jewel tones escalating to Legendary.
+     --t1 primary, --t2 deep, --t3 light, --tglow the halo colour.
+     Applied by `[data-tier]` in card.css; also used by tier chips elsewhere.
+     ========================================================================== */
+  --tier-common-1: #8c9bb5;
+  --tier-common-2: #5c6b86;
+  --tier-common-3: #cfd8e8;
+  --tier-common-glow: rgba(140, 155, 181, 0.35);
+
+  --tier-uncommon-1: var(--jewel-emerald);
+  --tier-uncommon-2: #0b7d5c;
+  --tier-uncommon-3: #b6ffe6;
+  --tier-uncommon-glow: rgba(20, 211, 154, 0.42);
+
+  --tier-rare-1: var(--jewel-cyan);
+  --tier-rare-2: #1668a8;
+  --tier-rare-3: #d2f4ff;
+  --tier-rare-glow: rgba(47, 210, 255, 0.45);
+
+  --tier-epic-1: var(--jewel-amethyst);
+  --tier-epic-2: #6a1fb0;
+  --tier-epic-3: #f0d8ff;
+  --tier-epic-glow: rgba(177, 77, 255, 0.5);
+
+  --tier-legendary-1: var(--jewel-gold);
+  --tier-legendary-2: #b26a0a;
+  --tier-legendary-3: #fff2cf;
+  --tier-legendary-glow: rgba(255, 194, 61, 0.55);
+
+  /* ==========================================================================
+     TYPE
+     Two families and nothing else. Display carries the names; mono carries every
+     label, every number and every small-caps heading — that is what makes the
+     interface read as an instrument rather than a form.
+     ========================================================================== */
+  --font-display: 'Avenir Next', 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
+
+  --size-micro: 9.5px; /* legend captions */
+  --size-label: 10px; /* control labels */
+  --size-small: 11px; /* section headings, chips */
+  --size-body: 13px;
+  --size-body-lg: 15px;
+  --size-title: 20px;
+  --size-display: clamp(26px, 4vw, 34px);
+  --size-wordmark: clamp(22px, 3.4vw, 30px);
+
+  /* Letter-spacing is load-bearing: small caps without it look like shrunk body text. */
+  --track-tight: 0.01em;
+  --track-label: 0.18em;
+  --track-heading: 0.26em;
+  --track-wordmark: 0.22em;
+
+  --weight-regular: 400;
+  --weight-medium: 600;
+  --weight-bold: 700;
+  --weight-black: 800;
+
+  --leading-tight: 1.15;
+  --leading-body: 1.5;
+
+  /* ==========================================================================
+     SPACING — a 4px base scale. Nothing in src/ui/ should invent a gap.
+     ========================================================================== */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 22px;
+  --sp-6: 32px;
+  --sp-7: 44px;
+  --sp-8: 64px;
+
+  /* ==========================================================================
+     RADII
+     ========================================================================== */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 20px;
+  --r-pill: 999px;
+
+  /* ==========================================================================
+     SHADOWS & GLOWS
+     ========================================================================== */
+  --shadow-panel: 0 2px 6px rgba(0, 0, 0, 0.4), 0 18px 50px rgba(0, 0, 0, 0.45);
+  --shadow-raised: 0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-sunk: 0 0 0 1px rgba(0, 0, 0, 0.55) inset, 0 3px 12px rgba(0, 0, 0, 0.45);
+  --glow-accent: 0 0 18px rgba(177, 77, 255, 0.35);
+  --glow-gold: 0 0 18px rgba(255, 194, 61, 0.35);
+  --glow-cyan: 0 0 10px rgba(47, 210, 255, 0.5);
+
+  /* ==========================================================================
+     FOIL RECIPES
+     Foil is earned by a trait, never rolled. Three layers, each with a rest
+     opacity and a bloom opacity; `--shine` (0..1, written by the pointer
+     handler) interpolates between them.
+     `opacity: calc(var(--foil-*-rest) + var(--foil-*-bloom) * var(--shine))`
+     At rest a card is clean and fully legible — that is the whole point of
+     having a rest value at all.
+     ========================================================================== */
+  --foil-irid-rest: 0.022;
+  --foil-irid-bloom: 0.16;
+  --foil-irid-art-rest: 0.05;
+  --foil-irid-art-bloom: 0.3;
+  --foil-irid-sheen: linear-gradient(
+      115deg,
+      transparent 34%,
+      rgba(255, 45, 149, 0.85) 42%,
+      rgba(255, 194, 61, 0.85) 46%,
+      rgba(20, 211, 154, 0.85) 50%,
+      rgba(47, 210, 255, 0.85) 54%,
+      rgba(177, 77, 255, 0.85) 59%,
+      transparent 67%
+    ),
+    repeating-linear-gradient(102deg, rgba(255, 255, 255, 0.1) 0 0.18em, transparent 0.18em 0.5em);
+
+  /* Glow is the one foil visible at rest — a glowing snake should glow. Kept low over the card
+     face (the type has to survive it) and higher inside the art window, where it cannot cost
+     anything. */
+  --foil-glow-rest: 0.1;
+  --foil-glow-bloom: 0.25;
+  --foil-glow-art-rest: 0.18;
+  --foil-glow-art-bloom: 0.22;
+
+  /* Glitter is zero at rest: real glitter foil only catches light at an angle.
+     Squared against --shine so it comes in late and hard. */
+  --foil-glit-rest: 0;
+  --foil-glit-bloom: 1;
+
+  /* Every card gets a faint pointer-tracked gloss, foil or not — it is what keeps
+     a card feeling like a physical object under a light. */
+  --foil-gloss-rest: 0.025;
+  --foil-gloss-bloom: 0.17;
+
+  /* ==========================================================================
+     MOTION
+     Durations and easings. `prefers-reduced-motion` collapses all of them in
+     styles.css — do not hard-code a duration anywhere else, or it will survive
+     that collapse.
+     ========================================================================== */
+  --dur-instant: 0.12s;
+  --dur-fast: 0.16s;
+  --dur-base: 0.3s;
+  --dur-slow: 0.5s;
+  --dur-flip: 0.72s;
+  --dur-flip-quick: 0.48s;
+  --dur-breathe: 3.6s;
+
+  --ease-out: cubic-bezier(0.22, 0.7, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.6, 1);
+  --ease-overshoot: cubic-bezier(0.5, -0.2, 0.25, 1.2); /* the card flip */
+  --ease-pop: cubic-bezier(0.2, 1.5, 0.4, 1); /* the celebration kick */
+
+  /* ==========================================================================
+     LAYERS
+     ========================================================================== */
+  --z-art: 1;
+  --z-content: 3;
+  --z-foil-glow: 5;
+  --z-foil-irid: 6;
+  --z-foil-glit: 7;
+  --z-foil-gloss: 8;
+  --z-fx-ring: 20;
+  --z-wrapper: 30;
+  --z-confetti: 40;
+  --z-escape: 50; /* the fourth-wall overlay, outside every clip */
+  --z-overlay: 100;
+  --z-toast: 200;
+}

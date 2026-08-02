@@ -14,7 +14,8 @@ import { unitsAbsorbed, rarityTierOf } from '../game/market'
 import { percent, type Session } from '../game/session'
 import { BASE_PRICE_BY_TIER, RARITY_TIERS, SATURATION_HALFLIFE_SALES } from '../game/tuning'
 import type { SnakeRecord } from '../game/roster'
-import { SnakeCanvas } from './SnakeCanvas'
+import { tierFor } from './cardModel'
+import { SnakePortrait } from './SnakePortrait'
 
 export interface MarketProps {
   readonly session: Session
@@ -25,7 +26,10 @@ export function Market({ session, onSold }: MarketProps) {
   const residents = session.residents()
 
   return (
-    <div className="market">
+    <div className="market panel">
+      <div className="panel-head">
+        <h3>The market</h3>
+      </div>
       <p className="muted small">
         Value is rarity, decayed by how many of that exact look the market has already absorbed
         (halving every {SATURATION_HALFLIFE_SALES}), scaled by vigor. Flood the market with one morph
@@ -42,11 +46,19 @@ export function Market({ session, onSold }: MarketProps) {
           const price = session.valueOf(record)
           return (
             <div className="listing" key={record.individual.id}>
-              <SnakeCanvas phenotype={phenotype} age={session.ageOf(record)} width={180} height={110} />
+              <div className="listing-thumb">
+                <SnakePortrait phenotype={phenotype} />
+              </div>
               <div className="listing-body">
                 <strong>{record.name}</strong>
+                <span className="tier-tag" data-tier={tierFor(session, record)}>
+                  {tierFor(session, record)}
+                </span>
+                {/* The market's own four-band measure, named as such: the chip above is the card's
+                    five-band frame tier, and two bare rarity words side by side would just look
+                    like a contradiction. */}
                 <span className="muted small">
-                  {RARITY_TIERS[tier - 1]?.label ?? 'common'} · base ${BASE_PRICE_BY_TIER[tier - 1]}
+                  market band {RARITY_TIERS[tier - 1]?.label ?? 'common'} · base ${BASE_PRICE_BY_TIER[tier - 1]}
                 </span>
                 <span className="muted small">
                   market has absorbed {absorbed.toFixed(1)} of this look

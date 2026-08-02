@@ -19,7 +19,7 @@
 import { useState } from 'react'
 import { percent, type Session } from '../game/session'
 import type { SnakeRecord } from '../game/roster'
-import { SnakeCanvas } from './SnakeCanvas'
+import { GenomeCard } from './GenomeCard'
 
 function relatednessNote(f: number): { tone: string; text: string } {
   if (f === 0) return { tone: 'good', text: 'Unrelated, as far as your records go — a clean outcross.' }
@@ -44,9 +44,10 @@ export function Breeding({ session, onHatched }: BreedingProps) {
 
   return (
     <div className="breeding">
-      <div className="pair-pickers">
+      <div className="panel pair-pickers">
         <Picker session={session} label="First snake" value={aId} onChange={setA} residents={residents} />
-        <div className="plus">+</div>
+        {/* A cross, in the genetics sense — the same symbol a punnett square is written with. */}
+        <div className="plus">×</div>
         <Picker session={session} label="Second snake" value={bId} onChange={setB} residents={residents} />
       </div>
 
@@ -157,12 +158,7 @@ function Picker({
       </label>
       <div className="picker-art">
         {selected ? (
-          <SnakeCanvas
-            phenotype={session.phenotype(selected)}
-            age={session.ageOf(selected)}
-            width={200}
-            height={130}
-          />
+          <GenomeCard session={session} record={selected} size="mini" faceUp />
         ) : (
           <div className="empty-art">nobody yet</div>
         )}

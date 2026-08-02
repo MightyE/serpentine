@@ -1,14 +1,26 @@
 /**
- * The rehab: every animal you are looking after, drawn live.
+ * The rehab: every animal you are looking after, as a binder of cards.
  *
- * Portraits would be cheaper and would be wrong. A still picture of a snake is a specimen; a
- * snake that moves is an animal you are looking after, and the difference is most of why anyone
- * opens this screen twice. `SnakeCanvas` puts them all on one shared frame loop so the cost of
- * being right here is one `requestAnimationFrame`, not thirty.
+ * ## Why a binder, and why the cards are still
+ *
+ * An earlier version drew every resident live, on the argument that a moving snake is an animal
+ * and a still one is a specimen. That is true of a *photograph*; it is not true of a card. A card
+ * that animates forever reads as a video player in a frame, and a card that is static at rest
+ * reads as a printed object you own — which is the whole collectible feeling this screen is
+ * chasing. The animals come alive during a reveal, one at a time, and then freeze into print.
+ *
+ * It is also the cheap path: thirty cached portraits instead of thirty render pipelines. The
+ * prettiest option and the fastest option rarely coincide, and when they do you take it.
+ *
+ * ## Face-down means "you have not looked at this one yet"
+ *
+ * A card you have never opened stays face-down in the binder. That is not decoration — it is the
+ * screen telling you there is something here you have not seen, and it is what makes a new hatch
+ * worth walking over to.
  */
-import { percent, type Session } from '../game/session'
+import type { Session } from '../game/session'
 import type { SnakeRecord } from '../game/roster'
-import { SnakeCanvas } from './SnakeCanvas'
+import { GenomeCard } from './GenomeCard'
 
 export interface CollectionProps {
   readonly session: Session
@@ -19,48 +31,36 @@ export function Collection({ session, onOpen }: CollectionProps) {
   const residents = session.residents()
 
   if (residents.length === 0) {
-    return (
-      <p className="empty">
-        Nobody here yet. Spawn a snake and the rehab has its first resident.
-      </p>
-    )
+    return <p className="empty">Nobody here yet — spawn a snake and the rehab has its first resident.</p>
   }
 
   const needingCare = residents.filter((r) => session.expressedLoadOf(r).length > 0)
 
   return (
-    <>
+    <div className="panel">
+      <div className="panel-head">
+        <h3>The binder — {residents.length} residents</h3>
+        <span className="muted small mono">tap a card to open its file</span>
+      </div>
+
       {needingCare.length > 0 && (
         <p className="care-banner">
-          {needingCare.length} resident{needingCare.length === 1 ? '' : 's'} need extra care. They are
-          fine — they just need more from you than the others do.
+          {needingCare.length} resident{needingCare.length === 1 ? '' : 's'} need extra care. They are fine — they
+          just need more from you than the others do.
         </p>
       )}
-      <div className="grid">
-        {residents.map((record) => {
-          const phenotype = session.phenotype(record)
-          const age = session.ageOf(record)
-          const care = session.expressedLoadOf(record).length > 0
-          return (
-            <button
-              key={record.individual.id}
-              className={`resident ${care ? 'needs-care-tile' : ''}`}
-              onClick={() => onOpen(record)}
-            >
-              <SnakeCanvas phenotype={phenotype} age={age} width={220} height={140} />
-              <span className="resident-name">{record.name}</span>
-              <span className="resident-sub">
-                {session.sexOf(record) === 'female' ? '♀' : '♂'} · {phenotype.label} ·{' '}
-                {age >= 1 ? 'grown' : age > 0.55 ? 'juvenile' : 'hatchling'}
-              </span>
-              <span className="resident-sub muted">
-                vigor {percent(session.vigorOf(record))} · ${session.valueOf(record)}
-              </span>
-              {care && <span className="care-tag">needs extra care</span>}
-            </button>
-          )
-        })}
+
+      <div className="binder">
+        {residents.map((record) => (
+          <GenomeCard
+            key={record.individual.id}
+            session={session}
+            record={record}
+            size="mini"
+            onActivate={() => onOpen(record)}
+          />
+        ))}
       </div>
-    </>
+    </div>
   )
 }

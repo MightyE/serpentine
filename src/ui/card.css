@@ -1,0 +1,953 @@
+/*
+ * The trading card.
+ *
+ * Ported from the Claude Design prototype `serpentine-cards.html`; every literal it used has
+ * become a token in `theme.css`. Nothing in here invents a colour or a duration.
+ *
+ * Card root API (set by `GenomeCard.tsx`):
+ *   data-tier   = common | uncommon | rare | epic | legendary   ← genotype improbability
+ *   data-foil   = space separated: iridescent glow glitter      ← the animal's actual traits
+ *   data-escape = none | peek | full                            ← opt-in, rare, default none
+ *   data-state  = facedown | flipping | revealing | settling | settled
+ *   .is-wrapped / .is-charging / .is-tearing / .is-revealed
+ *
+ * Everything inside the card is sized in `em` against a font-size derived from the card's own
+ * width, so one card scales to hero, default and mini with no second set of numbers.
+ */
+
+.card {
+  --cw: clamp(232px, 74vw, 300px);
+  --mx: 0.5; /* pointer x, 0..1 */
+  --my: 0.5; /* pointer y, 0..1 */
+  --shine: 0; /* 0 at rest, 1 mid-sweep. Written by the pointer handler. */
+  --tilt-x: 0deg;
+  --tilt-y: 0deg;
+
+  width: var(--cw);
+  aspect-ratio: 5 / 7;
+  font-size: calc(var(--cw) / 30); /* structural unit — every inner size is in em */
+  position: relative;
+  perspective: 1100px;
+  flex: 0 0 auto;
+  cursor: pointer;
+  border: 0;
+  padding: 0;
+  background: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.card.hero {
+  --cw: clamp(268px, 84vw, 372px);
+}
+.card.mini {
+  --cw: clamp(190px, 44vw, 232px);
+}
+.card:focus-visible {
+  outline: 2px solid var(--jewel-cyan);
+  outline-offset: 4px;
+  border-radius: var(--r-xl);
+}
+
+.card__tilt {
+  position: absolute;
+  inset: 0;
+  transform: rotateX(var(--tilt-x)) rotateY(var(--tilt-y));
+  transform-style: preserve-3d;
+  transition: transform var(--dur-base) var(--ease-out);
+}
+.card__flipper {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  transform: rotateY(180deg);
+  transition: transform var(--dur-flip) var(--ease-overshoot);
+}
+.card.is-revealed .card__flipper {
+  transform: rotateY(0deg);
+}
+.card.flip-quick .card__flipper {
+  transition-duration: var(--dur-flip-quick);
+}
+
+.face {
+  position: absolute;
+  inset: 0;
+  border-radius: 1.15em;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  overflow: hidden;
+}
+.face--back {
+  transform: rotateY(180deg);
+}
+
+/* ---------- tier palettes ---------- */
+.card {
+  --t1: var(--tier-common-1);
+  --t2: var(--tier-common-2);
+  --t3: var(--tier-common-3);
+  --tglow: var(--tier-common-glow);
+}
+.card[data-tier='uncommon'] {
+  --t1: var(--tier-uncommon-1);
+  --t2: var(--tier-uncommon-2);
+  --t3: var(--tier-uncommon-3);
+  --tglow: var(--tier-uncommon-glow);
+}
+.card[data-tier='rare'] {
+  --t1: var(--tier-rare-1);
+  --t2: var(--tier-rare-2);
+  --t3: var(--tier-rare-3);
+  --tglow: var(--tier-rare-glow);
+}
+.card[data-tier='epic'] {
+  --t1: var(--tier-epic-1);
+  --t2: var(--tier-epic-2);
+  --t3: var(--tier-epic-3);
+  --tglow: var(--tier-epic-glow);
+}
+.card[data-tier='legendary'] {
+  --t1: var(--tier-legendary-1);
+  --t2: var(--tier-legendary-2);
+  --t3: var(--tier-legendary-3);
+  --tglow: var(--tier-legendary-glow);
+}
+
+/* ---------- front frame: construction escalates with tier ---------- */
+.face--front {
+  background: radial-gradient(120% 90% at 50% -10%, color-mix(in oklab, var(--t2) 30%, transparent), transparent 62%),
+    linear-gradient(180deg, var(--bg-3), var(--card-face-mid) 55%, var(--card-face-deep));
+  padding: 0.5em;
+  box-shadow: 0 0.1em 0 rgba(255, 255, 255, 0.06) inset;
+}
+/* tier 1: a single hairline */
+.frame {
+  position: absolute;
+  inset: 0.42em;
+  border-radius: 0.85em;
+  border: 0.085em solid color-mix(in oklab, var(--t1) 65%, var(--card-frame-shade));
+  pointer-events: none;
+}
+/* tier 2+: a second inner rule */
+.frame::after {
+  content: '';
+  position: absolute;
+  inset: 0.22em;
+  border-radius: 0.68em;
+  border: 0.05em solid transparent;
+}
+.card[data-tier='uncommon'] .frame::after,
+.card[data-tier='rare'] .frame::after,
+.card[data-tier='epic'] .frame::after,
+.card[data-tier='legendary'] .frame::after {
+  border-color: color-mix(in oklab, var(--t1) 30%, transparent);
+}
+/* tier 3+: a metallic gradient edge.
+   A `border-box` gradient paints the whole border box, not just the ring, so it has to be masked
+   back to the border itself — otherwise the metallic sheet sits behind the entire card and washes
+   the tier colour over the artwork and the type. (The prototype's transparent `padding-box` layer
+   did not cover it; this does.) */
+.card[data-tier='rare'] .frame,
+.card[data-tier='epic'] .frame,
+.card[data-tier='legendary'] .frame {
+  border-color: transparent;
+  background: linear-gradient(145deg, var(--t3), var(--t1) 30%, var(--t2) 52%, var(--t1) 74%, var(--t3)) border-box;
+  -webkit-mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+/* tier 4+: corner brackets */
+.corner {
+  position: absolute;
+  width: 1.5em;
+  height: 1.5em;
+  pointer-events: none;
+  opacity: 0;
+  border: 0.11em solid var(--t1);
+}
+.card[data-tier='epic'] .corner,
+.card[data-tier='legendary'] .corner {
+  opacity: 0.95;
+}
+.corner--tl {
+  top: 0.28em;
+  left: 0.28em;
+  border-right: 0;
+  border-bottom: 0;
+  border-top-left-radius: 0.8em;
+}
+.corner--tr {
+  top: 0.28em;
+  right: 0.28em;
+  border-left: 0;
+  border-bottom: 0;
+  border-top-right-radius: 0.8em;
+}
+.corner--bl {
+  bottom: 0.28em;
+  left: 0.28em;
+  border-right: 0;
+  border-top: 0;
+  border-bottom-left-radius: 0.8em;
+}
+.corner--br {
+  bottom: 0.28em;
+  right: 0.28em;
+  border-left: 0;
+  border-top: 0;
+  border-bottom-right-radius: 0.8em;
+}
+/* tier 5: a rotating prismatic halo over a gold ground */
+.card[data-tier='legendary'] .face--front {
+  background: radial-gradient(120% 90% at 50% -10%, rgba(255, 194, 61, 0.22), transparent 60%),
+    linear-gradient(180deg, var(--card-gold-top), var(--card-gold-mid) 55%, var(--card-gold-deep));
+}
+.legend-halo {
+  position: absolute;
+  inset: -0.3em;
+  border-radius: 1.3em;
+  opacity: 0;
+  pointer-events: none;
+  background: conic-gradient(
+    from 0deg,
+    var(--jewel-gold),
+    var(--jewel-magenta),
+    var(--jewel-cyan),
+    var(--jewel-emerald),
+    var(--jewel-gold)
+  );
+  filter: blur(0.55em);
+  z-index: -1;
+}
+/* The halo glows at every state but only *turns* while the card is in motion. A settled card is
+   static, full stop — a rotating aura on a printed object is exactly the idle animation D8 rules
+   out, and the gold reads just as well standing still. */
+.card[data-tier='legendary'] .legend-halo {
+  opacity: 0.55;
+}
+.card[data-tier='legendary']:not([data-state='settled']) .legend-halo {
+  animation: card-spin 7s linear infinite;
+}
+.card[data-tier='legendary'] {
+  filter: drop-shadow(0 0 1.1em rgba(255, 194, 61, 0.28));
+}
+@keyframes card-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---------- front content ---------- */
+.card .content {
+  position: absolute;
+  inset: 0.78em;
+  display: grid;
+  grid-template-rows: auto auto 1fr auto auto auto;
+  gap: 0.42em;
+  z-index: var(--z-content);
+  text-align: left;
+}
+
+.hdr {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+}
+.tier-chip {
+  font-family: var(--font-mono);
+  font-size: 0.8em;
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  font-weight: var(--weight-bold);
+  padding: 0.28em 0.5em 0.24em;
+  border-radius: var(--r-pill);
+  color: var(--ink-on-bright);
+  background: linear-gradient(100deg, var(--t3), var(--t1));
+  white-space: nowrap;
+}
+.pips {
+  display: flex;
+  gap: 0.2em;
+  margin-left: auto;
+}
+.pip {
+  width: 0.34em;
+  height: 0.34em;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+}
+.pip.on {
+  background: var(--t1);
+  box-shadow: 0 0 0.35em var(--t1);
+}
+
+/* inheritance-mechanism badges */
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.26em;
+}
+.badge {
+  width: 1.55em;
+  height: 1.55em;
+  border-radius: 0.38em;
+  display: grid;
+  place-items: center;
+  background: var(--surface-raised);
+  border: 0.05em solid color-mix(in oklab, var(--t1) 45%, transparent);
+}
+.badge svg {
+  width: 0.85em;
+  height: 0.85em;
+  display: block;
+}
+.badge svg * {
+  fill: var(--t3);
+  stroke: var(--t3);
+}
+
+/* art window — the centrepiece */
+.art-window {
+  position: relative;
+  border-radius: 0.55em;
+  overflow: hidden;
+  border: 0.075em solid color-mix(in oklab, var(--t1) 55%, var(--card-art-shade));
+  background: repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.045) 0 0.12em, transparent 0.12em 0.34em),
+    radial-gradient(90% 80% at 50% 20%, color-mix(in oklab, var(--t2) 42%, var(--card-art-deep)), var(--bg-sunk) 78%);
+  box-shadow: var(--shadow-sunk);
+  min-height: 0;
+}
+.card[data-tier='legendary'] .art-window,
+.card[data-tier='epic'] .art-window {
+  border-width: 0.1em;
+}
+.card .snake-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  z-index: var(--z-art);
+}
+
+/* nameplate */
+.nameplate {
+  display: grid;
+  gap: 0.1em;
+}
+.cname {
+  font-size: 1.75em;
+  font-weight: var(--weight-black);
+  letter-spacing: var(--track-tight);
+  line-height: var(--leading-tight);
+  text-transform: uppercase;
+  margin: 0;
+  text-shadow: 0 0.06em 0.3em rgba(0, 0, 0, 0.85);
+  overflow-wrap: anywhere;
+}
+.card .species {
+  font-family: var(--font-mono);
+  font-size: 0.78em;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+.pedigree {
+  justify-self: start;
+  margin-top: 0.18em;
+  font-family: var(--font-mono);
+  font-size: 0.78em;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--t3);
+  background: color-mix(in oklab, var(--t2) 35%, rgba(0, 0, 0, 0.5));
+  border: 0.07em solid color-mix(in oklab, var(--t1) 40%, transparent);
+  padding: 0.22em 0.42em 0.18em;
+  border-radius: 0.3em;
+}
+
+/* stats */
+.card .stats {
+  display: grid;
+  gap: 0.22em;
+  background: var(--surface-sunk);
+  border: 0.05em solid rgba(255, 255, 255, 0.09);
+  border-radius: 0.45em;
+  padding: 0.45em 0.5em;
+  backdrop-filter: blur(2px);
+}
+.card .stat {
+  display: grid;
+  grid-template-columns: 5.4em 1fr 2.4em;
+  align-items: center;
+  gap: 0.4em;
+}
+.card .stat .k {
+  font-family: var(--font-mono);
+  font-size: 0.72em;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+.card .bar {
+  display: flex;
+  gap: 0.12em;
+  height: 0.42em;
+}
+.seg {
+  flex: 1;
+  border-radius: 0.06em;
+  background: rgba(255, 255, 255, 0.11);
+}
+.seg.on {
+  background: linear-gradient(90deg, var(--t1), var(--t3));
+}
+.card .stat .v {
+  font-family: var(--font-mono);
+  font-size: 0.74em;
+  text-align: right;
+  color: var(--ink);
+}
+
+/* HIDDEN — the hook. It is the reason you want to breed the animal, so it gets
+   the gold, the meter and the biggest number on the block. */
+.hidden-stat {
+  margin-top: 0.12em;
+  padding-top: 0.38em;
+  border-top: 0.05em dashed rgba(255, 255, 255, 0.16);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 0.3em;
+}
+.hidden-stat .k {
+  font-family: var(--font-mono);
+  font-size: 0.84em;
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--unknown);
+}
+.hidden-stat .sub {
+  font-family: var(--font-mono);
+  font-size: 0.62em;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+.hidden-meter {
+  display: flex;
+  gap: 0.14em;
+  height: 0.58em;
+  margin-top: 0.22em;
+  grid-column: 1 / -1;
+}
+.hidden-meter i {
+  flex: 1;
+  border-radius: 0.07em;
+  background: rgba(255, 255, 255, 0.09);
+  border: 0.04em solid rgba(255, 255, 255, 0.1);
+}
+.hidden-meter i.on {
+  background: linear-gradient(180deg, var(--jewel-gold-light), var(--unknown));
+  border-color: transparent;
+  box-shadow: 0 0 0.3em rgba(255, 194, 61, 0.7);
+}
+.hidden-val {
+  font-family: var(--font-mono);
+  font-weight: var(--weight-bold);
+  font-size: 1.25em;
+  color: var(--unknown);
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+/* flavour — the real-vs-modelled note. The card teaches the biology. */
+.flavour {
+  font-size: 0.8em;
+  line-height: 1.35;
+  font-style: italic;
+  color: var(--ink-flavour);
+  border-top: 0.05em solid rgba(255, 255, 255, 0.1);
+  padding-top: 0.4em;
+  margin: 0;
+  text-shadow: 0 0.05em 0.25em rgba(0, 0, 0, 0.9);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ============================================================
+   FOILS — earned by traits, pointer-reactive, muted at rest.
+   ============================================================ */
+.foil {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.1s linear;
+  border-radius: inherit;
+}
+.foil--art {
+  position: absolute;
+  inset: 0;
+}
+
+.foil--irid {
+  z-index: var(--z-foil-irid);
+  background: var(--foil-irid-sheen);
+  background-size: 240% 240%, auto;
+  background-position: calc(var(--mx) * 100%) calc(var(--my) * 100%), 0 0;
+  mix-blend-mode: color-dodge;
+  filter: saturate(1.5) contrast(1.05);
+}
+/* over the card face the sheen fades out before it reaches the type block:
+   legibility beats sparkle, always. */
+.face--front > .foil--irid {
+  -webkit-mask-image: linear-gradient(180deg, #000 0 46%, rgba(0, 0, 0, 0.32) 58%, transparent 68%);
+  mask-image: linear-gradient(180deg, #000 0 46%, rgba(0, 0, 0, 0.32) 58%, transparent 68%);
+}
+.foil--irid.foil--art {
+  background-size: 200% 200%, auto;
+}
+.card[data-foil~='iridescent'] .foil--irid {
+  opacity: calc(var(--foil-irid-rest) + var(--foil-irid-bloom) * var(--shine));
+}
+.card[data-foil~='iridescent'] .foil--irid.foil--art {
+  opacity: calc(var(--foil-irid-art-rest) + var(--foil-irid-art-bloom) * var(--shine));
+}
+
+.foil--glow {
+  z-index: var(--z-foil-glow);
+  background: radial-gradient(
+    60% 50% at calc(var(--mx) * 100%) calc(var(--my) * 100%),
+    color-mix(in oklab, var(--t1) 80%, white) 0%,
+    transparent 62%
+  );
+  mix-blend-mode: screen;
+  filter: blur(0.35em);
+}
+/* The full-card glow layer is cut off above the nameplate. A glowing animal should glow, but not
+   at the cost of reading its name — legibility beats the effect every time, and the art window has
+   its own unmasked glow layer where there is no type to lose. */
+.face--front > .foil--glow {
+  -webkit-mask-image: linear-gradient(180deg, #000 0 38%, rgba(0, 0, 0, 0.35) 47%, transparent 55%);
+  mask-image: linear-gradient(180deg, #000 0 38%, rgba(0, 0, 0, 0.35) 47%, transparent 55%);
+}
+.card[data-foil~='glow'] .foil--glow {
+  opacity: calc(var(--foil-glow-rest) + var(--foil-glow-bloom) * var(--shine));
+}
+.card[data-foil~='glow'] .foil--glow.foil--art {
+  opacity: calc(var(--foil-glow-art-rest) + var(--foil-glow-art-bloom) * var(--shine));
+}
+.card[data-foil~='glow'] {
+  filter: drop-shadow(0 0 1.2em var(--tglow));
+}
+.card[data-tier='legendary'][data-foil~='glow'] {
+  filter: drop-shadow(0 0 1.5em var(--tglow));
+}
+
+.foil--glit {
+  z-index: var(--z-foil-glit);
+  background-image: radial-gradient(circle at 18% 26%, #fff 0, #fff 0.07em, transparent 0.1em),
+    radial-gradient(circle at 72% 61%, var(--jewel-gold-light) 0, var(--jewel-gold-light) 0.06em, transparent 0.09em),
+    radial-gradient(circle at 44% 84%, var(--tier-rare-3) 0, var(--tier-rare-3) 0.05em, transparent 0.08em),
+    radial-gradient(circle at 88% 12%, #fff 0, #fff 0.05em, transparent 0.08em);
+  background-size: 2.1em 2.1em, 1.55em 1.55em, 2.7em 2.7em, 1.2em 1.2em;
+  mix-blend-mode: screen;
+  -webkit-mask-image: radial-gradient(
+    46% 40% at calc(var(--mx) * 100%) calc(var(--my) * 100%),
+    #000 0%,
+    transparent 74%
+  );
+  mask-image: radial-gradient(46% 40% at calc(var(--mx) * 100%) calc(var(--my) * 100%), #000 0%, transparent 74%);
+}
+/* squared, so glitter is genuinely absent until the card is moving */
+.card[data-foil~='glitter'] .foil--glit {
+  opacity: calc(var(--foil-glit-rest) + var(--foil-glit-bloom) * var(--shine) * var(--shine));
+}
+
+.foil--gloss {
+  z-index: var(--z-foil-gloss);
+  opacity: calc(var(--foil-gloss-rest) + var(--foil-gloss-bloom) * var(--shine));
+  background: radial-gradient(
+    50% 40% at calc(var(--mx) * 100%) calc(var(--my) * 100%),
+    rgba(255, 255, 255, 0.55),
+    transparent 70%
+  );
+  mix-blend-mode: soft-light;
+}
+
+/* ============================================================
+   CARD BACK
+   ============================================================ */
+.face--back {
+  background: radial-gradient(70% 55% at 50% 45%, var(--card-back-top) 0%, var(--card-back-mid) 55%, var(--card-back-deep) 100%);
+  display: grid;
+  place-items: center;
+  border: 0.085em solid var(--card-back-edge);
+}
+.back-pattern {
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(60deg, rgba(177, 77, 255, 0.16) 0 0.1em, transparent 0.1em 0.78em),
+    repeating-linear-gradient(-60deg, rgba(47, 210, 255, 0.14) 0 0.1em, transparent 0.1em 0.78em),
+    repeating-linear-gradient(0deg, rgba(255, 194, 61, 0.07) 0 0.06em, transparent 0.06em 1.56em);
+}
+.back-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(60% 50% at 50% 50%, transparent 30%, rgba(6, 4, 10, 0.82) 100%);
+}
+.back-frame {
+  position: absolute;
+  inset: 0.5em;
+  border-radius: 0.8em;
+  border: 0.06em solid rgba(255, 255, 255, 0.14);
+}
+.back-frame::after {
+  content: '';
+  position: absolute;
+  inset: 0.3em;
+  border-radius: 0.6em;
+  border: 0.05em solid rgba(255, 255, 255, 0.07);
+}
+.back-emblem {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+.back-emblem .d {
+  width: 5.4em;
+  height: 5.4em;
+  transform: rotate(45deg);
+  border-radius: 0.6em;
+  border: 0.12em solid rgba(255, 255, 255, 0.3);
+  background: linear-gradient(135deg, rgba(255, 45, 149, 0.28), rgba(47, 210, 255, 0.24), rgba(255, 194, 61, 0.28));
+  display: grid;
+  place-items: center;
+}
+.back-emblem .d i {
+  width: 2.9em;
+  height: 2.9em;
+  border-radius: 50%;
+  border: 0.1em solid rgba(255, 255, 255, 0.42);
+  box-shadow: 0 0 0 0.3em rgba(255, 255, 255, 0.07) inset;
+}
+.back-wordmark {
+  position: absolute;
+  bottom: 1.5em;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 0.8em;
+  letter-spacing: 0.38em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+/* ============================================================
+   WRAPPER + FIRST-VIEW THEATRE
+   Only ever shown the first time an animal is seen. See `reveal.ts`.
+   ============================================================ */
+.wrapper {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-wrapper);
+  display: none;
+  border-radius: 1.15em;
+}
+.card.is-wrapped .wrapper {
+  display: block;
+}
+.wrap-half {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: repeating-linear-gradient(45deg, rgba(0, 0, 0, 0.25) 0 0.35em, transparent 0.35em 0.7em),
+    linear-gradient(150deg, var(--wrap-top), var(--wrap-mid) 55%, var(--wrap-deep));
+  border: 0.085em solid rgba(255, 255, 255, 0.14);
+  border-radius: 1.15em;
+  transition: transform var(--dur-slow) var(--ease-in-out), opacity var(--dur-slow) ease;
+}
+.wrap-half::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(50% 40% at 50% 45%, color-mix(in oklab, var(--t1) 55%, transparent), transparent 70%);
+  opacity: 0.5;
+}
+.wrap-half--l {
+  clip-path: polygon(0 0, 52% 0, 46% 18%, 55% 34%, 44% 52%, 53% 70%, 46% 86%, 51% 100%, 0 100%);
+}
+.wrap-half--r {
+  clip-path: polygon(52% 0, 100% 0, 100% 100%, 51% 100%, 46% 86%, 53% 70%, 44% 52%, 55% 34%, 46% 18%);
+}
+.wrap-seal {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+  width: 3.4em;
+  height: 3.4em;
+  border-radius: 50%;
+  z-index: 2;
+  border: 0.1em solid rgba(255, 255, 255, 0.35);
+  background: radial-gradient(circle at 35% 30%, var(--t3), var(--t1) 55%, var(--t2));
+  box-shadow: 0 0 1.2em var(--tglow);
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-size: 1em;
+  font-weight: var(--weight-bold);
+  color: rgba(0, 0, 0, 0.6);
+  transition: opacity var(--dur-base), transform var(--dur-base);
+}
+.wrap-sheen {
+  position: absolute;
+  inset: 0;
+  border-radius: 1.15em;
+  overflow: hidden;
+  z-index: 1;
+  pointer-events: none;
+}
+.wrap-sheen::before {
+  content: '';
+  position: absolute;
+  top: -60%;
+  bottom: -60%;
+  width: 45%;
+  left: -60%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.75), transparent);
+  filter: blur(0.2em);
+  transform: rotate(14deg);
+}
+.card.is-charging .wrap-sheen::before {
+  animation: card-sweep 1.05s ease-in-out 3;
+}
+@keyframes card-sweep {
+  0% {
+    left: -60%;
+  }
+  100% {
+    left: 120%;
+  }
+}
+.card.is-charging .card__tilt {
+  animation: card-rattle 0.16s linear infinite;
+}
+.card.is-charging .wrap-seal {
+  animation: card-sealpulse 0.7s ease-in-out infinite;
+}
+@keyframes card-sealpulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.14);
+  }
+}
+@keyframes card-rattle {
+  0% {
+    translate: 0 0;
+  }
+  25% {
+    translate: -0.09em 0.05em;
+  }
+  50% {
+    translate: 0.07em -0.06em;
+  }
+  75% {
+    translate: -0.05em -0.03em;
+  }
+  100% {
+    translate: 0 0;
+  }
+}
+.card.is-tearing .wrap-half--l {
+  transform: translateX(-62%) rotate(-13deg);
+  opacity: 0;
+}
+.card.is-tearing .wrap-half--r {
+  transform: translateX(62%) rotate(13deg);
+  opacity: 0;
+}
+.card.is-tearing .wrap-seal {
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(2.2);
+}
+
+/* ============================================================
+   FOURTH-WALL ESCAPE STAGE  (rare — opt-in per card)
+
+   The escape canvas is a direct child of .card, outside every overflow:hidden
+   layer, so the snake can be drawn over the frame, over the type and past the
+   card's own edge. It is live only while the card is revealing/settling AND the
+   card opted in via data-escape. On settle the pose is composited into
+   canvas.snake-canvas, which IS clipped by .art-window — the snake becomes
+   printed ink and all motion stops.
+
+   Tier only raises the ceiling on how far an opted-in escape may go
+   (--escape-ceil); it never triggers one.
+   ============================================================ */
+.escape-canvas {
+  position: absolute;
+  inset: -34%;
+  width: 168%;
+  height: 168%;
+  z-index: var(--z-escape);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s linear;
+}
+.card[data-escape='peek'][data-state='revealing'] .escape-canvas,
+.card[data-escape='peek'][data-state='settling'] .escape-canvas,
+.card[data-escape='full'][data-state='revealing'] .escape-canvas,
+.card[data-escape='full'][data-state='settling'] .escape-canvas {
+  opacity: 1;
+}
+
+.card {
+  --escape-ceil: 0.45;
+}
+.card[data-tier='uncommon'] {
+  --escape-ceil: 0.6;
+}
+.card[data-tier='rare'] {
+  --escape-ceil: 0.75;
+}
+.card[data-tier='epic'] {
+  --escape-ceil: 0.9;
+}
+.card[data-tier='legendary'] {
+  --escape-ceil: 1;
+}
+
+/* celebration layers */
+.fx-canvas {
+  position: absolute;
+  inset: -25%;
+  width: 150%;
+  height: 150%;
+  z-index: var(--z-confetti);
+  pointer-events: none;
+}
+.fx-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 1.15em;
+  z-index: var(--z-fx-ring);
+  pointer-events: none;
+  box-shadow: 0 0 0 0 var(--tglow);
+  opacity: 0;
+}
+.card.fx-pop .fx-ring {
+  animation: card-ringpop 0.85s var(--ease-out) forwards;
+}
+@keyframes card-ringpop {
+  0% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 var(--tglow), 0 0 2em 0.4em var(--tglow) inset;
+  }
+  100% {
+    opacity: 0;
+    box-shadow: 0 0 0 2.6em transparent, 0 0 0 0 transparent inset;
+  }
+}
+.card.fx-pop .card__tilt {
+  animation: card-popscale 0.6s var(--ease-pop);
+}
+@keyframes card-popscale {
+  0% {
+    scale: 1;
+  }
+  32% {
+    scale: 1.07;
+  }
+  100% {
+    scale: 1;
+  }
+}
+
+/* mini treatment: fewer, larger elements — no micro-type in a binder grid */
+.card.mini .flavour,
+.card.mini .species,
+.card.mini .stats .stat,
+.card.mini .hidden-stat .sub {
+  display: none;
+}
+.card.mini .cname {
+  font-size: 2.1em;
+}
+.card.mini .tier-chip,
+.card.mini .pedigree {
+  font-size: 1.05em;
+}
+.card.mini .hidden-stat {
+  padding-top: 0;
+  border-top: 0;
+}
+.card.mini .hidden-stat .k {
+  font-size: 1.05em;
+}
+.card.mini .hidden-val {
+  font-size: 1.5em;
+}
+
+/* a care flag rides the card rather than sitting beside it */
+.card .care-flag {
+  position: absolute;
+  top: 0.55em;
+  right: 0.55em;
+  z-index: var(--z-content);
+  font-family: var(--font-mono);
+  font-size: 0.62em;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-on-bright);
+  background: var(--jewel-emerald);
+  border-radius: var(--r-pill);
+  padding: 0.3em 0.55em;
+  font-weight: var(--weight-bold);
+}
+
+/* slot caption under a binder card */
+.card-slot {
+  display: grid;
+  gap: var(--sp-2);
+  justify-items: center;
+}
+.card-slot .cap {
+  font-family: var(--font-mono);
+  font-size: var(--size-micro);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  text-align: center;
+}
+.card-slot .cap b {
+  color: var(--ink);
+  font-weight: var(--weight-medium);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card *,
+  .card *::before,
+  .card *::after {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+  }
+  .card__flipper {
+    transition-duration: 0.01ms !important;
+  }
+  .foil {
+    opacity: 0 !important;
+  }
+  .fx-canvas,
+  .escape-canvas {
+    display: none;
+  }
+}
