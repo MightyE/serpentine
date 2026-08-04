@@ -54,6 +54,21 @@ import {
 } from './gates'
 import { isLoadLocus, makeLoadPool, playableSpecies } from './loadPool'
 import { estimateValue, sellSnake, unitsAbsorbed, type SaturationLedger } from './market'
+import {
+  canPlace,
+  habitatOf,
+  pairingIn,
+  place,
+  startingStore,
+  withdraw,
+  type AnimalFacts,
+  type HabitatState,
+  type PlacementOptions,
+  type PlacementWorld,
+  type StoreState,
+} from './placement'
+import type { PlacementRefusal } from '../habitat/provisions'
+import type { LifeStage } from './tuning'
 import type { SnakeRecord } from './roster'
 import { advanceTurn, currentTurn } from './time'
 import {
@@ -127,6 +142,16 @@ export class Session {
   readonly saturation: SaturationLedger = {}
   readonly gateMode: GateMode
   readonly clutchSize: number
+
+  /**
+   * The store floor: which habitats are built, and who lives in each.
+   *
+   * Held here rather than in a component for the same reason as everything else in this class —
+   * the whole of placement is drivable from a test with no renderer. The *rules* live in
+   * `placement.ts` as pure functions over this value; the session only owns the current one and
+   * tells its listeners when it changes.
+   */
+  store: StoreState = startingStore()
 
   /** Evidence, by individual. Belief is recomputed from this; see the file header. */
   private readonly evidence: Record<IndividualId, Evidence[]> = {}
@@ -586,6 +611,8 @@ export class Session {
       this.speciesOf(record).playable,
       { ledger: this.saturation, turn: this.turn, vigor: this.vigorOf(record) },
     )
+    // An animal that has left must not keep holding a slot nothing can free.
+    this.store = withdraw(this.store, id)
     this.changed()
     return price
   }
@@ -604,6 +631,99 @@ export class Session {
     this.state.flags.bump('totalCareGiven')
     this.state.bus.emit('snake.comforted', { individualId: id, totalCareGiven: total })
     this.changed()
+  }
+
+  // -- the store floor -------------------------------------------------------
+
+  /**
+   * Which life stage an animal is at, for housing purposes.
+   *
+   * Derived from age rather than stored, so it is right after any number of turns and cannot go
+   * stale in a save. Anything that arrived from outside the rescue is an adult — the market does
+   * not sell hatchlings, and a rescue does not receive one without its mother.
+   */
+  stageOf(record: SnakeRecord): LifeStage {
+    if (record.source !== 'bred') return 'adult'
+    const age = this.ageOf(record)
+    return age < 0.25 ? 'hatchling' : age < 1 ? 'juvenile' : 'adult'
+  }
+
+  /** One animal, as placement sees it. Stage, species and sex; nothing else is any of its business. */
+  factsOf(record: SnakeRecord): AnimalFacts {
+    return {
+      id: record.individual.id,
+      name: record.name,
+      species: record.individual.species,
+      speciesLabel: this.speciesOf(record).authored.label.toLowerCase(),
+      sex: this.sexOf(record),
+      stage: this.stageOf(record),
+    }
+  }
+
+  /**
+   * The roster, as `placement.ts` reads it.
+   *
+   * Rebuilt on each call rather than cached: a stale housing decision is worse than a lookup, and
+   * this is a map over a roster measured in dozens.
+   */
+  placementWorld(): PlacementWorld {
+    return {
+      animal: (id) => {
+        const record = this.state.roster.get(id)
+        return record ? this.factsOf(record) : undefined
+      },
+    }
+  }
+
+  /** Where an animal lives, if anywhere. Unhoused is a normal state, not an error. */
+  habitatOf(id: IndividualId): HabitatState | undefined {
+    return habitatOf(this.store, id)
+  }
+
+  /** Would this placement be allowed? `null` for yes; otherwise a refusal to show the player. */
+  checkPlacement(id: IndividualId, habitatId: string, options: PlacementOptions = {}): PlacementRefusal | null {
+    return canPlace(this.store, habitatId, id, this.placementWorld(), options)
+  }
+
+  /**
+   * Move an animal into a habitat.
+   *
+   * Returns the refusal instead of throwing, because the caller here is a UI and a refusal is a
+   * thing to *show*, not an exception to handle. `null` means it went in.
+   */
+  placeSnake(id: IndividualId, habitatId: string, options: PlacementOptions = {}): PlacementRefusal | null {
+    const refusal = this.checkPlacement(id, habitatId, options)
+    if (refusal) return refusal
+    this.store = place(this.store, habitatId, id, this.placementWorld(), options)
+    this.changed()
+    return null
+  }
+
+  /** Take an animal off the floor — back to the binder, holding no slot. */
+  unhouse(id: IndividualId): void {
+    const next = withdraw(this.store, id)
+    if (next === this.store) return
+    this.store = next
+    this.changed()
+  }
+
+  /** The couple currently sharing a habitat, if there is one. What the store screen offers to breed. */
+  pairingIn(habitatId: string): { readonly motherId: IndividualId; readonly fatherId: IndividualId } | undefined {
+    return pairingIn(this.store, habitatId, this.placementWorld())
+  }
+
+  /**
+   * Breed the pair living in a habitat.
+   *
+   * **Deliberately a two-line method.** It finds the couple and calls {@link breed} — the existing
+   * path, with its existing checks, its existing gates and its existing `F` bookkeeping. Housing
+   * two compatible animals together is a *way to reach* breeding, not a second breeding mechanism,
+   * and the moment this file grew its own clutch logic the two would start to disagree.
+   */
+  breedInHabitat(habitatId: string): readonly SnakeRecord[] {
+    const pair = this.pairingIn(habitatId)
+    if (!pair) throw new Error(`breedInHabitat: no pairing in '${habitatId}'`)
+    return this.breed(pair.motherId, pair.fatherId)
   }
 
   // -- time ------------------------------------------------------------------

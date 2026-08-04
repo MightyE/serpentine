@@ -1,0 +1,458 @@
+/*
+ * The store floor.
+ *
+ * Every value here comes from `theme.css`. The one exception the token file itself carves out is
+ * the per-element mechanics of a single effect — a gradient's stops, one hairline's alpha — and
+ * those are the only literals below.
+ *
+ * The register: the habitats are the only saturated, textured things on the screen, and
+ * everything around them is glass over the dark field. That is deliberate. The enclosures are
+ * hand-drawn ground and planting; if the chrome competes with them the screen turns into a
+ * dashboard with pictures on it.
+ */
+
+.store {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: var(--sp-5);
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .store {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.store-panel {
+  min-width: 0;
+}
+
+/* ==========================================================================
+   THE GRID
+   Driven entirely by --store-columns / --store-rows, written by Store.tsx from
+   the session's own store state. Nothing here knows the number nine — the floor
+   is going to become upgradable.
+   ========================================================================== */
+.store-floor {
+  display: grid;
+  grid-template-columns: repeat(var(--store-columns), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--store-rows), minmax(0, 1fr));
+  /* The floor keeps the room's own proportions, so a cell is always about square and the
+     enclosures are the largest thing on the screen. They are the reward — this is the view
+     the renderer exists for, and it should not be a row of stamps. Driven off the same two
+     custom properties as the grid itself, so an upgraded 4 × 3 floor still lays out right. */
+  aspect-ratio: var(--store-columns) / var(--store-rows);
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border-radius: var(--r-lg);
+  background: var(--surface-sunk);
+  box-shadow: var(--shadow-sunk);
+}
+
+/* An unbuilt cell. Reads as floor you could put something on, not as a broken tile. */
+.floor-cell {
+  border: 1px dashed var(--line);
+  border-radius: var(--r-md);
+  display: grid;
+  place-items: center;
+}
+.floor-cell span {
+  font-family: var(--font-mono);
+  font-size: var(--size-micro);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+/* ==========================================================================
+   A HABITAT
+   ========================================================================== */
+.habitat {
+  position: relative;
+  min-width: 0;
+  border-radius: var(--r-md);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition:
+    box-shadow var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+
+.habitat-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Everything over the art gets its own scrim, because the art is deliberately busy and type
+   over unmodified planting is unreadable at any size. Both sit above the drop button, so the
+   occupants' own pick-up controls stay clickable while something is being carried. */
+.habitat-head,
+.habitat-foot {
+  position: relative;
+  z-index: var(--z-content);
+}
+
+/* The drop target: a real button covering the art, present only while carrying. */
+.habitat-drop {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-art);
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  display: grid;
+  place-items: center;
+  cursor: copy;
+}
+.habitat-drop span {
+  font-size: var(--size-micro);
+  letter-spacing: var(--track-heading);
+  text-transform: uppercase;
+  color: var(--ink);
+  background: rgba(6, 4, 10, 0.72);
+  border-radius: var(--r-pill);
+  padding: var(--sp-1) var(--sp-3);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+.habitat-drop:hover span,
+.habitat-drop:focus-visible span {
+  opacity: 1;
+}
+.habitat-drop:hover,
+.habitat-drop:focus-visible {
+  background: transparent;
+}
+.habitat[data-target='no'] .habitat-drop {
+  cursor: not-allowed;
+}
+
+.habitat-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  background: linear-gradient(180deg, rgba(6, 4, 10, 0.78), rgba(6, 4, 10, 0));
+}
+
+.habitat-name {
+  font-family: var(--font-mono);
+  font-size: var(--size-small);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--ink);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+
+.habitat-count {
+  font-size: var(--size-small);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--track-tight);
+  color: var(--jewel-gold);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+}
+
+.habitat-foot {
+  display: grid;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  background: linear-gradient(0deg, rgba(6, 4, 10, 0.88) 40%, rgba(6, 4, 10, 0));
+}
+
+.habitat-occupants {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.habitat-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
+.habitat-size {
+  font-size: var(--size-micro);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.habitat-features {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+}
+.habitat-features li {
+  font-size: var(--size-micro);
+  letter-spacing: var(--track-tight);
+  color: var(--ink-faint);
+  border: 1px solid var(--line-faint);
+  border-radius: var(--r-pill);
+  padding: 1px var(--sp-2);
+}
+
+.habitat-pairing {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  border: 1px solid color-mix(in oklab, var(--jewel-magenta) 45%, transparent);
+  background: color-mix(in oklab, var(--jewel-magenta) 14%, transparent);
+  border-radius: var(--r-md);
+  padding: var(--sp-1) var(--sp-2);
+}
+.habitat-pairing span {
+  font-size: var(--size-micro);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--jewel-magenta);
+}
+
+.habitat-refusal {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--size-micro);
+  line-height: var(--leading-body);
+  color: var(--jewel-gold);
+  border: 1px solid color-mix(in oklab, var(--jewel-gold) 45%, transparent);
+  background: color-mix(in oklab, var(--jewel-gold) 12%, transparent);
+  border-radius: var(--r-sm);
+  padding: var(--sp-2);
+}
+
+/* --- how a habitat reads while you are carrying something ------------------
+   Valid targets have to be obvious *at a glance across nine tiles*, so the cue
+   is the whole outline plus a lift, not a small badge. Invalid ones recede
+   rather than turning red: the refusal message says what is wrong, and nine
+   red boxes would say it nine times without saying why once. */
+.habitat[data-target='ok'] {
+  border-color: var(--jewel-emerald);
+  box-shadow:
+    0 0 0 1px var(--jewel-emerald),
+    0 0 22px color-mix(in oklab, var(--jewel-emerald) 45%, transparent);
+  cursor: copy;
+  transform: translateY(-2px);
+}
+.habitat[data-target='confirm'] {
+  border-color: var(--jewel-magenta);
+  box-shadow:
+    0 0 0 1px var(--jewel-magenta),
+    0 0 22px color-mix(in oklab, var(--jewel-magenta) 45%, transparent);
+  cursor: copy;
+}
+.habitat[data-target='no'] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.habitat:focus-within {
+  outline: 2px solid var(--jewel-cyan);
+  outline-offset: 2px;
+}
+
+/* ==========================================================================
+   AN ANIMAL YOU CAN PICK UP
+   ========================================================================== */
+.bench-list li {
+  min-width: 0;
+}
+
+.handle {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  gap: var(--sp-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-raised);
+  overflow: hidden;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+
+/* Art in one column, name over facts in the other. A single row put the name, the sex, the life
+   stage and a button on one 280px line and truncated the only part anyone reads. */
+.handle-grab {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: 'art name' 'art facts';
+  align-items: center;
+  column-gap: var(--sp-2);
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: var(--sp-2);
+  cursor: grab;
+  text-align: left;
+}
+.handle-grab:active {
+  cursor: grabbing;
+}
+
+.handle-art {
+  grid-area: art;
+  width: 52px;
+  height: 34px;
+  flex: none;
+  border-radius: var(--r-sm);
+  background: var(--bg-sunk);
+}
+
+/* An animal's name is a name, not a control label — so it opts out of the global button
+   uppercasing rather than being shouted at you nine times down the bench. */
+.handle-name {
+  grid-area: name;
+  font-family: var(--font-display);
+  font-size: var(--size-body);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--track-tight);
+  text-transform: none;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.handle-facts {
+  grid-area: facts;
+  font-size: var(--size-micro);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.handle-open {
+  flex: none;
+  border: 0;
+  border-left: 1px solid var(--line-faint);
+  border-radius: 0;
+  font-size: var(--size-micro);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  padding: 0 var(--sp-2);
+}
+
+/* Held state has to survive being read across a busy screen, so it is a colour change, a glow
+   and a lift together — any one of them alone is missable against the planting. */
+.handle[data-held] {
+  border-color: var(--accent);
+  box-shadow: var(--glow-accent);
+  transform: translateY(-2px);
+}
+.handle[data-held] .handle-name {
+  color: var(--accent);
+}
+
+.handle.compact {
+  background: rgba(6, 4, 10, 0.72);
+  backdrop-filter: blur(2px);
+}
+/* Inside a habitat there is no room and no need for a second line — you can see where it lives. */
+.handle.compact .handle-grab {
+  grid-template-areas: 'art name';
+  padding: var(--sp-1) var(--sp-2);
+}
+.handle.compact .handle-art {
+  width: 34px;
+  height: 22px;
+}
+.handle.compact .handle-name {
+  font-size: var(--size-small);
+}
+.handle.compact .handle-facts {
+  display: none;
+}
+
+/* ==========================================================================
+   THE BENCH — animals with nowhere to be yet
+   ========================================================================== */
+.bench {
+  position: sticky;
+  top: var(--sp-4);
+}
+
+.bench-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--sp-2);
+  max-height: 60vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.carry-banner {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--size-body);
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  border: 1px solid color-mix(in oklab, var(--accent) 45%, transparent);
+  background: color-mix(in oklab, var(--accent) 12%, transparent);
+  border-radius: var(--r-md);
+  padding: var(--sp-2) var(--sp-3);
+}
+
+/* The thing that follows the pointer. Offset up and left of the cursor so the animal is not
+   under your own finger on a touchscreen. */
+.carry-ghost {
+  position: fixed;
+  z-index: var(--z-toast);
+  transform: translate(-50%, -140%);
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-md);
+  border: 1px solid var(--accent);
+  background: var(--bg-2);
+  box-shadow: var(--glow-accent), var(--shadow-panel);
+  font-family: var(--font-mono);
+  font-size: var(--size-small);
+  letter-spacing: var(--track-tight);
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.carry-ghost-art {
+  width: 54px;
+  height: 34px;
+  border-radius: var(--r-sm);
+  background: var(--bg-sunk);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .habitat,
+  .handle {
+    transition: none;
+  }
+  .habitat[data-target='ok'],
+  .handle[data-held] {
+    transform: none;
+  }
+}

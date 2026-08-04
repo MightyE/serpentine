@@ -665,6 +665,105 @@ export const ENCLOSURE_TYPES: readonly EnclosureType[] = [
 ]
 
 // ===========================================================================
+// THE STORE FLOOR — principles 5, 7 (space is the scarce thing, and it stays scarce)
+// ===========================================================================
+//
+// The rescue is a room, drawn top-down, and habitats are built into it. Three decisions live
+// here and each of them is load-bearing.
+//
+// **1. The grid is a parameter, not a constant.** The store will become upgradable, so `3 × 3` is
+// today's value and not an assumption. `createStore()` takes `columns`/`rows`; nothing downstream
+// hard-codes nine. Buying floor space is out of scope for now — the seam is what is being kept
+// open, not the flow.
+//
+// **2. Capacity is exactly one animal per grid cell, at every size.** Larger habitats hold more
+// because they *are* larger, never because they are more efficient. That is principle 7 with its
+// mechanism intact: if a big enclosure held more animals per square foot, then upgrading floor
+// space would be strictly better than choosing carefully, capacity pressure would evaporate, and
+// taking an animal in would stop being a decision. It is the single most tempting number in this
+// file to make generous, and the one that must not be.
+//
+// **3. What a bigger habitat actually buys is feature slots**, and those *do* rise faster than
+// area — 2, 5, 10 across 1, 2 and 4 cells. Space converts into husbandry quality rather than into
+// throughput, which is the trade the economy design wants: the display habitat is where the
+// renderer shows you an animal and where provisions do anything, and a rack is still the best
+// capacity per pound. Neither answer is wrong; they buy different things.
+//
+// Life stages narrow as habitats get bigger, mirroring `ENCLOSURE_TYPES`. A hatchling loose in a
+// planted atrium is a welfare problem rather than a treat, so the game refuses it and says why.
+
+export type LifeStage = 'hatchling' | 'juvenile' | 'adult'
+
+export type HabitatSizeId = 'alcove' | 'vivarium' | 'atrium'
+
+export interface HabitatSize {
+  readonly id: HabitatSizeId
+  readonly label: string
+  /** Grid cells spanned. Capacity is `columns × rows`; see the note above for why. */
+  readonly columns: number
+  readonly rows: number
+  readonly capacity: number
+  readonly stages: readonly LifeStage[]
+  readonly featureSlots: number
+  readonly cost: number
+  readonly upkeepPerWeek: number
+}
+
+export const HABITAT_SIZES: readonly HabitatSize[] = [
+  {
+    id: 'alcove',
+    label: 'Alcove',
+    columns: 1,
+    rows: 1,
+    capacity: 1,
+    stages: ['hatchling', 'juvenile', 'adult'],
+    featureSlots: 2,
+    cost: SLOT_PURCHASE_COST,
+    upkeepPerWeek: SLOT_UPKEEP_PER_WEEK,
+  },
+  {
+    id: 'vivarium',
+    label: 'Vivarium',
+    columns: 2,
+    rows: 1,
+    capacity: 2,
+    stages: ['juvenile', 'adult'],
+    featureSlots: 5,
+    // Superlinear in cost, linear in capacity. That gap is the whole of principle 5's brake on
+    // the runaway loop: more room always costs more per animal than the room you already have.
+    cost: Math.round(SLOT_PURCHASE_COST * 2.6),
+    upkeepPerWeek: SLOT_UPKEEP_PER_WEEK * 2.2,
+  },
+  {
+    id: 'atrium',
+    label: 'Planted atrium',
+    columns: 2,
+    rows: 2,
+    capacity: 4,
+    stages: ['adult'],
+    featureSlots: 10,
+    cost: Math.round(SLOT_PURCHASE_COST * 6.5),
+    upkeepPerWeek: SLOT_UPKEEP_PER_WEEK * 5,
+  },
+]
+
+/** Look one up. Throws rather than defaulting: an unknown size id is a bug, not a fallback. */
+export function habitatSize(id: HabitatSizeId): HabitatSize {
+  const found = HABITAT_SIZES.find((size) => size.id === id)
+  if (!found) throw new Error(`habitatSize: no habitat size '${id}'`)
+  return found
+}
+
+/**
+ * The store floor you start with. **A value, not an assumption** — see decision 1 above.
+ *
+ * Nine cells and three habitats built into them, so two thirds of the floor is visibly empty from
+ * the first minute. Space you can see and cannot use yet is what makes buying more of it feel
+ * like something; a full grid on day one would make the upgrade read as a chore.
+ */
+export const STORE_GRID_DEFAULT = { columns: 3, rows: 3 } as const
+
+// ===========================================================================
 // PROVISIONS — one model for biomes and features (anticipates the habitat work)
 // ===========================================================================
 //

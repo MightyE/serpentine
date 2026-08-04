@@ -19,9 +19,10 @@ import { CheatPanel } from './CheatPanel'
 import { Collection } from './Collection'
 import { Market } from './Market'
 import { SnakeCard } from './SnakeCard'
+import { Store } from './Store'
 import { useSession } from './useSession'
 
-type Screen = 'rehab' | 'breeding' | 'market' | 'cheats'
+type Screen = 'rehab' | 'store' | 'breeding' | 'market' | 'cheats'
 
 export function App() {
   const session = useSession()
@@ -95,6 +96,9 @@ export function App() {
         <button className={screen === 'rehab' ? 'on' : ''} onClick={() => setScreen('rehab')}>
           The rehab
         </button>
+        <button className={screen === 'store' ? 'on' : ''} onClick={() => setScreen('store')}>
+          The floor
+        </button>
         <button className={screen === 'breeding' ? 'on' : ''} onClick={() => setScreen('breeding')}>
           Breeding
         </button>
@@ -121,6 +125,14 @@ export function App() {
       <main>
         {screen === 'rehab' && (
           <Collection session={session} onOpen={(record) => setOpenId(record.individual.id)} />
+        )}
+        {screen === 'store' && (
+          <Store
+            session={session}
+            onOpen={(record) => setOpenId(record.individual.id)}
+            onHatched={hatched}
+            say={say}
+          />
         )}
         {screen === 'breeding' && <Breeding session={session} onHatched={hatched} />}
         {screen === 'market' && (

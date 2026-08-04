@@ -20,6 +20,7 @@ import type { CareLog } from './rehab'
 import type { SnakeRecord } from './roster'
 import type { GameState } from './game'
 import type { FlagValue } from './seams'
+import { deserializeStore, serializeStore, type StoreSave, type StoreState } from './placement'
 
 export const SAVE_SCHEMA_VERSION = 1
 
@@ -30,9 +31,19 @@ export interface SaveFile {
   readonly flags: Readonly<Record<string, FlagValue>>
   readonly careLog: CareLog
   readonly roster: readonly SnakeRecord[]
+  /**
+   * The store floor — which habitats are built and who lives in each.
+   *
+   * **Optional, and the schema version did not move.** It lives on the `Session` rather than on
+   * `GameState` (habitats are a playing-game concern, the way loaded species are), so it comes in
+   * as an argument rather than being read off the game. Absent in a save written before habitats
+   * existed, which loads as a fresh floor rather than as an error — that is what optional buys,
+   * and it is why this did not need a migration.
+   */
+  readonly store?: StoreSave
 }
 
-export function serializeGame(game: GameState): SaveFile {
+export function serializeGame(game: GameState, store?: StoreSave): SaveFile {
   return {
     schemaVersion: SAVE_SCHEMA_VERSION,
     worldSeed: game.worldSeed,
@@ -40,7 +51,20 @@ export function serializeGame(game: GameState): SaveFile {
     flags: game.flags.all(),
     careLog: { ...game.careLog },
     roster: game.roster.all(),
+    ...(store ? { store: serializeStore(store) } : {}),
   }
+}
+
+/**
+ * The store floor out of a save file, or `undefined` if it predates habitats.
+ *
+ * Separate from `deserializeGame` because the store is not part of `GameState`. It resolves its
+ * occupants against the save's own roster, so an animal sold before the save cannot come back as
+ * a phantom resident holding a slot nothing can free.
+ */
+export function storeFromSave(save: SaveFile): StoreState | undefined {
+  if (!save.store) return undefined
+  return deserializeStore(save.store, new Set(save.roster.map((record) => record.individual.id)))
 }
 
 export function deserializeGame(save: SaveFile): GameState {

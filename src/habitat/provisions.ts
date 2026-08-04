@@ -201,12 +201,54 @@ export function applyBenefits(ledger: BenefitLedger): AppliedBenefits {
   }
 }
 
-/** Why a placement was refused. Never a penalty — a refusal, with a reason you can act on. */
+/**
+ * Why a placement was refused. Never a penalty — a refusal, with a reason you can act on.
+ *
+ * **Every one of these carries the facts its sentence needs**, which is not decoration: a drag
+ * that is silently rejected is the most frustrating thing a UI can do, and the only way to be
+ * sure a reason always exists is for the refusal type to be unable to exist without one. See
+ * {@link describeRefusal}, which is total over this union — add a member and the compiler will
+ * make you write its sentence.
+ */
 export type PlacementRefusal =
   | { readonly kind: 'lifeStage'; readonly stage: string; readonly enclosure: string }
-  | { readonly kind: 'capacity'; readonly capacity: number }
+  | { readonly kind: 'capacity'; readonly capacity: number; readonly enclosure: string }
   | { readonly kind: 'featureSlots'; readonly used: number; readonly available: number }
   | { readonly kind: 'belowBaseline'; readonly axes: readonly ProvisionAxis[] }
+  /** There is no enclosure in that space yet — empty floor, not a habitat. */
+  | { readonly kind: 'unbuilt' }
+  /** Already living there. Not an error; just nothing to do. */
+  | { readonly kind: 'alreadyHere'; readonly enclosure: string }
+  /** Two species in one enclosure. Refused outright — this one is not a preference. */
+  | {
+      readonly kind: 'mixedSpecies'
+      readonly enclosure: string
+      readonly resident: string
+      readonly residentSpecies: string
+      readonly incomingSpecies: string
+    }
+  /**
+   * This would put a compatible pair together, and pairing is how breeding happens here.
+   *
+   * Not a rule against it — it is the *feature*. It is a refusal only until the player says yes,
+   * because a clutch that arrives because you dropped a snake in the wrong box is a clutch you
+   * did not choose to make, and choosing the pairing is the whole game.
+   */
+  | {
+      readonly kind: 'wouldPair'
+      readonly enclosure: string
+      readonly partnerId: string
+      readonly partner: string
+    }
+
+/**
+ * The subset of an enclosure that housing rules actually read.
+ *
+ * Widened from `EnclosureType` so a `HabitatSize` (the store floor's own sizes, in `tuning.ts`)
+ * satisfies it too. Every existing caller still type-checks — `EnclosureType` is assignable — and
+ * there is now one housing rule rather than two that will disagree within a month.
+ */
+export type Housing = Pick<EnclosureType, 'label' | 'capacity' | 'stages' | 'featureSlots'>
 
 /**
  * Can this animal go in this enclosure?
@@ -214,12 +256,16 @@ export type PlacementRefusal =
  * Refusals, not penalties — the whole point. A hatchling in a display habitat is a welfare
  * problem rather than a treat, so the game declines and says why.
  *
+ * This function answers the *enclosure's* half of the question: stage, capacity, slots, baseline.
+ * Who is already in there is the store's half, and it lives in `game/placement.ts` — which calls
+ * this one and then adds the cohabitation checks that need a roster to answer.
+ *
  * The `belowBaseline` branch cannot fire against any provision shipped today, because no
  * provision supplies a negative amount. It is here anyway, because the day someone adds a
  * provision with a downside is the day this needs to already exist rather than be remembered.
  */
 export function canHouse(
-  enclosure: EnclosureType,
+  enclosure: Housing,
   animalStage: 'hatchling' | 'juvenile' | 'adult',
   installed: readonly AnyProvision[],
   occupants: number,
@@ -229,7 +275,7 @@ export function canHouse(
     return { kind: 'lifeStage', stage: animalStage, enclosure: enclosure.label }
   }
   if (occupants >= enclosure.capacity) {
-    return { kind: 'capacity', capacity: enclosure.capacity }
+    return { kind: 'capacity', capacity: enclosure.capacity, enclosure: enclosure.label }
   }
   const used = installed.reduce((sum, p) => sum + p.featureSlotCost, 0)
   if (used > enclosure.featureSlots) {
@@ -239,6 +285,46 @@ export function canHouse(
     return { kind: 'belowBaseline', axes: ledger.match.shortfalls }
   }
   return null
+}
+
+const AXIS_WORDS: Readonly<Record<ProvisionAxis, string>> = {
+  humidity: 'humidity',
+  thermalGradient: 'a warm end and a cool end',
+  cover: 'somewhere to hide',
+  climbing: 'something to climb',
+  substrateDepth: 'substrate deep enough to dig in',
+  enrichment: 'enrichment',
+}
+
+/**
+ * A refused placement, in a sentence a player can act on.
+ *
+ * Total over {@link PlacementRefusal} with no default branch, deliberately: adding a refusal kind
+ * without writing its sentence should be a compile error rather than a shrug in the UI. Every one
+ * of these says *what is wrong* and, where there is one, *what to do instead* — "this enclosure
+ * is full" alone is only half an answer.
+ */
+export function describeRefusal(refusal: PlacementRefusal): string {
+  switch (refusal.kind) {
+    case 'lifeStage':
+      return `A ${refusal.stage} should not be housed in the ${refusal.enclosure.toLowerCase()} — too much open space to feel safe in. Try a smaller one.`
+    case 'capacity':
+      return refusal.capacity === 1
+        ? `The ${refusal.enclosure.toLowerCase()} already has its one resident. Move that one out first, or pick a larger habitat.`
+        : `The ${refusal.enclosure.toLowerCase()} is full — it holds ${refusal.capacity}.`
+    case 'featureSlots':
+      return `That habitat has ${refusal.available} feature slot${refusal.available === 1 ? '' : 's'} and ${refusal.used} are installed. Take something out first.`
+    case 'belowBaseline':
+      return `That habitat is missing ${refusal.axes.map((axis) => AXIS_WORDS[axis]).join(' and ')}. Nothing gets housed below baseline here.`
+    case 'unbuilt':
+      return 'That is empty floor — there is no habitat built there yet.'
+    case 'alreadyHere':
+      return `Already living in the ${refusal.enclosure.toLowerCase()}.`
+    case 'mixedSpecies':
+      return `${refusal.resident} is a ${refusal.residentSpecies} and lives there. A ${refusal.incomingSpecies} does not share an enclosure with one.`
+    case 'wouldPair':
+      return `${refusal.partner} is in the ${refusal.enclosure.toLowerCase()}, and these two would pair. Drop again to confirm — or put this one somewhere else.`
+  }
 }
 
 /** Is this provision buyable yet? The gate is reputation — never money, never elapsed time. */
