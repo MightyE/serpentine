@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Serpentine — edge contrast probe</title>
+    <style>
+      /*
+        A dev-only measurement page. It draws nothing you are meant to look at: it renders animals
+        offscreen, reads the pixels back, and prints numbers. Vite serves any .html at the project
+        root, so this needs no config. See src/habitat/lab/edgeContrast.ts for what is measured.
+      */
+      :root {
+        color-scheme: dark;
+      }
+      body {
+        margin: 0;
+        padding: 1.2rem 1.4rem 4rem;
+        background: #14161f;
+        color: #e8ecf4;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+      }
+      h1 {
+        font-size: 1.1rem;
+        margin: 0 0 0.3rem;
+      }
+      p.note {
+        margin: 0 0 1.4rem;
+        max-width: 62ch;
+        font-size: 0.85rem;
+        line-height: 1.5;
+        color: #97a1bb;
+      }
+      h2 {
+        font-size: 0.92rem;
+        margin: 1.8rem 0 0.5rem;
+        color: #b9c3dc;
+      }
+      table {
+        border-collapse: collapse;
+        font-size: 0.82rem;
+        font-variant-numeric: tabular-nums;
+      }
+      th,
+      td {
+        padding: 0.22rem 0.7rem;
+        text-align: right;
+        border-bottom: 1px solid #262b3a;
+      }
+      th:first-child,
+      td:first-child,
+      th:nth-child(2),
+      td:nth-child(2),
+      td:last-child {
+        text-align: left;
+      }
+      th {
+        color: #8f9ab5;
+        font-weight: 500;
+      }
+      .gallery {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.8rem;
+      }
+      .gallery figure {
+        margin: 0;
+      }
+      .gallery canvas {
+        display: block;
+      }
+      .gallery figcaption {
+        padding-top: 0.25rem;
+        font-size: 0.75rem;
+        color: #8f9ab5;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Edge contrast probe</h1>
+    <p class="note">
+      Weber contrast between an animal's rim band and the substrate ring just outside it, on a flat
+      fill of each cypress-margin substrate colour. Under ~0.10 a boundary stops reading as one and
+      the animal looks see-through even though the body is an opaque fill. <b>relief</b> is rim
+      minus core: negative darkens the flanks, positive lightens them, near zero is a flat tube.
+    </p>
+    <div id="probe"></div>
+    <script type="module" src="/src/habitat/lab/edgeContrast.ts"></script>
+  </body>
+</html>

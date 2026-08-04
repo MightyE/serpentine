@@ -23,12 +23,15 @@
 
 import type { Phenotype } from './contract'
 import { bodyLength, widthProfile } from './bodyShape'
-import { toCss, mix, rgba } from './colour'
+import { toCss } from './colour'
 import { effectsFor, totalDrift, type EffectDefinition, type EffectDrawContext } from './effects'
 import { add, distance, perp, scale, vec, type ControlPoint, type Vec2 } from './geometry'
 import { drawFace } from './head'
+// The rim and spine-highlight pass is shared with the life views rather than copied here: it is
+// the same animal, and the copy that used to live in this file drifted from it.
+import { drawRoundness } from './life/paint'
 import { drawUpturnedSnout } from './snout'
-import { buildRibbon, traceRibbon, paintRibbon, type Ribbon } from './ribbon'
+import { buildRibbon, traceRibbon, paintRibbon } from './ribbon'
 import { coilPose, visualSpine, DEFAULT_WAVE, Spine, type WaveParams } from './spine'
 import { patternTextureFor, type PatternTexture } from './texture'
 import { hashSeed, makeRng, type Rng } from '../lib/rng'
@@ -243,38 +246,4 @@ function applyHeadSway(points: Vec2[], time: number, amount: number, phase: numb
     const n = perp({ x: t.x / len, y: t.y / len })
     points[i] = add(points[i], scale(n, swing * falloff * falloff))
   }
-}
-
-/**
- * A dark edge and a light spine line — the cheapest possible way to make a flat fill look like
- * a rounded tube. Two strokes, no gradients, no per-pixel shading.
- */
-function drawRoundness(ctx: CanvasRenderingContext2D, ribbon: Ribbon, phenotype: Phenotype): void {
-  ctx.save()
-  traceRibbon(ctx, ribbon)
-  ctx.clip()
-
-  // Rim: a wide-ish stroke on the inside of the outline, darkening the flanks.
-  ctx.lineWidth = Math.max(1.5, Math.max(...ribbon.widths) * 0.16)
-  ctx.strokeStyle = toCss(mix(phenotype.baseColour, rgba(20, 14, 24, 1), 0.4))
-  ctx.globalAlpha = 0.22
-  traceRibbon(ctx, ribbon)
-  ctx.stroke()
-
-  // Highlight: a thin light line along the top of the spine.
-  ctx.globalAlpha = 0.16
-  ctx.lineWidth = Math.max(1, Math.max(...ribbon.widths) * 0.1)
-  ctx.strokeStyle = 'rgba(255, 255, 255, 1)'
-  ctx.beginPath()
-  const spine = ribbon.spine
-  const start = Math.floor(spine.length * 0.06)
-  const end = Math.floor(spine.length * 0.82)
-  for (let i = start; i < end; i++) {
-    const offset = scale(perp(ribbon.tangents[i]), ribbon.widths[i] * 0.16)
-    const p = add(spine[i], offset)
-    if (i === start) ctx.moveTo(p.x, p.y)
-    else ctx.lineTo(p.x, p.y)
-  }
-  ctx.stroke()
-  ctx.restore()
 }

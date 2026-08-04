@@ -286,55 +286,57 @@ export function occupantScale(enclosure: Bounds, phenotype: Phenotype): number {
 /**
  * `[down, across, reach, alpha]` per pass, offsets and reach as fractions of body width.
  *
- * The alphas are the tuned part, and they are a compromise rather than a maximum. A shadow can
- * only darken, and darkening helps only while the surround stays clear of the animal's own rim:
- * push it further and the surround comes down *through* a dark animal's rim luminance and the
- * silhouette dissolves a second time, on the mid-tone biome instead of the dark one. Because the
- * drop a wash produces scales with the surround's own brightness, the pale biomes constrain this
- * from above and the dark ones from below.
+ * ## These used to be doing two jobs, and one of them was not theirs
  *
- * These two numbers are the pair that maximises the *worst* edge contrast across substrates, swept
- * in `edge-contrast-probe.html`. The surface is genuinely opposed — at the extremes, no shadow at
- * all scores 0.320 on cypress and 0.077 on cypress-dark, and a heavy one scores 0.039 and 0.334 —
- * so this is a saddle, not a knob that wants turning up. Worst case here measures 0.205.
+ * They were `0.06` and `0.30`, and that pair was a *saddle*: it maximised the worst edge contrast
+ * across substrates, and it had to, because the rim shade was an absolute darkening and a dark
+ * animal's own outline came out darker than its body. The shadow was the only thing supplying a
+ * silhouette on a dark biome, and pushing it further to help there dissolved the silhouette on a
+ * pale one. `drawRoundness` shades relative to the base colour now (`render/life/paint.ts`), a
+ * dark animal has a rim light of its own, and that whole tension is gone: swept again in
+ * `edge-contrast-probe.html`, worst-case edge contrast is now *monotonic* in both alphas — every
+ * pair in the grid, down to no shadow at all (0.132), clears the ~0.10 where a boundary stops
+ * reading.
+ *
+ * So the alphas are no longer chosen for contrast. They are chosen for the only thing a contact
+ * shadow was ever supposed to do — make the animal read as resting *on* the substrate rather than
+ * pasted over it — and they are as light as they can be while still doing it. At the old values
+ * the skirt reads as a ring of grime around a pale animal on a pale biome; at zero the animal
+ * floats. Worst case at these values measures **0.229** (Starlight on cypress), against **0.162**
+ * for the old pair with the old rim, which is what actually shipped.
+ *
+ * Offsets and reach are fractions of the body's own width, so a hatchling gets a hatchling's
+ * shadow. The alphas are not: they are contrast, and contrast does not scale with size.
  *
  * Exported mutable so a probe page can sweep the alphas and re-measure without editing this file;
  * nothing in the game writes to it.
  */
 export const CONTACT_SHADOW_PASSES: [number, number, number, number][] = [
-  [0.34, 0.22, 0.1, 0.06],
-  [0.22, 0.15, 0, 0.3],
+  [0.34, 0.22, 0.1, 0.03],
+  [0.22, 0.15, 0, 0.22],
 ]
 
 /**
  * A dark shape under the body: offset, so the animal reads as resting *on* the substrate.
  *
- * ## Why one wash is not enough, measured
+ * ## Why two passes and not one
  *
- * This used to be a single `rgba(4, 2, 8, 0.3)` fill at one offset, which works on sand and does
- * nothing on the biome that needs it most. The arithmetic is unforgiving: the darkest real
- * substrate is cypress margin's `rgba(38, 34, 28)` at luminance 34, and 30% of the way from there
- * toward near-black is luminance 25 — a drop of nine. Against that, a dark-based animal's own rim
- * (`drawRoundness` shades it 22% toward `rgba(20, 14, 24)`) measured at luminance 59 beside a
- * surround at 54: a Weber contrast of **0.083**, under the ~0.10 where a boundary stops being one.
- * The animal did not look translucent because anything was translucent — the body is a provably
- * opaque fill — it looked translucent because its edge and the ground it sat on were the same
- * brightness, so there was no silhouette to see.
+ * This used to be a single `rgba(4, 2, 8, 0.3)` fill at one offset, which reads as contact on
+ * sand and reads as nothing at all on peat: the darkest real substrate is cypress margin's
+ * `rgba(38, 34, 28)` at luminance 34, and 30% of the way from there toward near-black is
+ * luminance 25 — a drop of nine, on ground where nine is invisible. So there are two:
  *
- * So the shadow is what supplies the missing edge, and it needs two passes to do it:
- *
- * - a **skirt**, grown outward past the silhouette and faint, which is the only part visible on a
- *   pale substrate and the part that separates the body from a dark one;
- * - a **core**, tight and much darker, offset further, which is the actual contact.
+ * - a **skirt**, grown outward past the silhouette and faint, which is what separates the body
+ *   from a dark substrate at all;
+ * - a **core**, tight and darker, offset further, which is the actual contact.
  *
  * Growing a pass outward uses the same stroke-and-fill trick as {@link drawSelectionUnderlay}:
  * stroking the traced outline at `2 × reach` and filling it under the nonzero rule widens the
  * silhouette by `reach` without a second path and without `shadowBlur`, which would be
  * re-rasterised for every animal on every frame.
  *
- * Offsets and reach are fractions of the body's own width, so a hatchling gets a hatchling's
- * shadow. The alphas are not: they are contrast, and contrast does not scale with size — see
- * {@link CONTACT_SHADOW_PASSES}.
+ * The two-pass shape is worth keeping; the *strength* it was set to is not, and the history of
+ * why is in {@link CONTACT_SHADOW_PASSES}.
  */
 function drawContactShadow(
   ctx: CanvasRenderingContext2D,
