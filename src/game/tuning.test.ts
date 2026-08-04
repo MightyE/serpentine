@@ -811,7 +811,15 @@ makeGamete() before you look at this test.`,
     // Averaged across lineages because a single family's answer depends on which three load
     // alleles its two founders happened to draw, and the design band is a statement about the
     // population, not about one family.
-    const session = new Session({ worldSeed: 'invariant-line-breeding', clutchSize: 6 })
+    // `gateMode: 'instant'` because this measures genetics, not pacing: it needs two generations
+    // of real animals, and clicking through fifteen weeks of incubation and two years of growth
+    // forty times would test the clock instead. The gates are unchanged and so is the band — the
+    // durations are simply zero, which is the switch `gates.ts` declares for exactly this.
+    const session = new Session({
+      worldSeed: 'invariant-line-breeding',
+      clutchSize: 6,
+      gateMode: 'instant',
+    })
     const ratios: number[] = []
 
     for (let lineage = 0; lineage < 40; lineage++) {

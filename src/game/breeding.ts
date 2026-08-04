@@ -1,7 +1,14 @@
 /**
- * The breeding action: a pairing produces a clutch through `GeneticsEngine.breed`, and the game
- * layer turns that into roster entries and events. This file makes no genetics decisions of its
- * own — it is entirely about what happens to a `Clutch` once the engine has produced one.
+ * The **hatching** action: a clutch comes out of `GeneticsEngine.breed`, and the game layer turns
+ * it into roster entries and events. This file makes no genetics decisions of its own — it is
+ * entirely about what happens to a `Clutch` once the engine has produced one.
+ *
+ * Note what is *not* here: `clutch.laid`. Laying and hatching are separated by the incubation
+ * gate — eight or nine weeks in which the eggs exist and no hatchling does — so the two events
+ * cannot both come from one call. `session.ts` emits `clutch.laid` when the pair actually
+ * produces the clutch, and calls this when the gate resolves. Emitting both here would announce
+ * a clutch as laid on the week it hatched, which is the sort of detail a player notices exactly
+ * once and then stops believing the rest of the readouts.
  */
 import type { ClutchRequest, GeneticsEngine, SpeciesDefinition } from '../genetics/types'
 import type { Phenotype } from '../render/contract'
@@ -36,13 +43,6 @@ export function breedPair(
   flags: FlagSet,
   turn: number,
 ): BreedResult {
-  bus.emit('clutch.laid', {
-    motherId: request.mother.id,
-    fatherId: request.father.id,
-    eggCount: request.clutchSize,
-    clutchSeed: request.seed,
-  })
-
   const clutch = engine.breed(request, species)
 
   for (const hatchling of clutch.hatched) {

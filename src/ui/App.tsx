@@ -11,12 +11,14 @@
  *
  * Nothing here reads a clock. Time moves when you move it.
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { cheatsUnlocked } from '../game/cheats'
+import { describeRemaining } from '../game/gates'
 import type { SnakeRecord } from '../game/roster'
 import { Breeding } from './Breeding'
 import { CheatPanel } from './CheatPanel'
 import { Collection } from './Collection'
+import { InFlight } from './InFlight'
 import { Market } from './Market'
 import { SnakeCard } from './SnakeCard'
 import { Store } from './Store'
@@ -49,14 +51,63 @@ export function App() {
     window.setTimeout(() => setToast((current) => (current === message ? null : current)), 4000)
   }
 
+  /**
+   * What a `breed()` call actually produced.
+   *
+   * With the gates on, committing a pairing usually produces *nothing yet* — the clutch is weeks
+   * out. That is a third case, and it must not be reported as the second one: "no hatchlings from
+   * that clutch" after a successful pairing would tell the player their pairing failed.
+   */
   const hatched = (babies: readonly SnakeRecord[]) => {
     if (babies.length === 0) {
-      say('No hatchlings from that clutch — the pairing screen said which combinations do not develop.')
+      const waiting = session.inFlight().find((item) => item.kind === 'receptivity')
+      say(
+        waiting
+          ? `${waiting.subject} are together. Expect a clutch within ${waiting.remaining}.`
+          : 'No hatchlings from that clutch — the pairing screen said which combinations do not develop.',
+      )
       return
     }
     setOpenId(babies[0]!.individual.id)
     say(`${babies[0]!.name} hatched.`)
   }
+
+  /**
+   * Arrivals announce themselves.
+   *
+   * A clutch that hatches while you are on the market screen has to say so — otherwise the only
+   * evidence a gate resolved is a number that changed somewhere you were not looking, which is
+   * indistinguishable from nothing having happened. Everything here rides the ordinary event bus
+   * in `game/seams.ts`, so the game layer stays unaware a toast exists.
+   */
+  const sayRef = useRef(say)
+  sayRef.current = say
+  useEffect(() => {
+    const bus = session.state.bus
+    const stops = [
+      bus.on('clutch.laid', (e) => {
+        const mother = session.record(e.motherId)?.name ?? 'A pair'
+        sayRef.current(`${mother} laid ${e.eggCount} ${e.eggCount === 1 ? 'egg' : 'eggs'}.`)
+      }),
+      bus.on('clutch.hatched', (e) => {
+        sayRef.current(
+          e.hatchedCount === 0
+            ? 'That clutch did not produce a hatchling — the pairing screen said which combinations do not develop.'
+            : `A clutch hatched — ${e.hatchedCount} ${e.hatchedCount === 1 ? 'hatchling' : 'hatchlings'}.`,
+        )
+      }),
+      bus.on('snake.matured', (e) => {
+        const record = session.record(e.individualId)
+        if (record) sayRef.current(`${record.name} is grown, and can be bred.`)
+      }),
+      bus.on('pairing.lapsed', (e) => sayRef.current(e.reason)),
+    ]
+    return () => {
+      for (const stop of stops) stop()
+    }
+  }, [session])
+
+  const nextArrival = session.nextArrival()
 
   return (
     <div className="app">
@@ -83,14 +134,29 @@ export function App() {
           </span>
         </div>
 
+        {/* The skip button names its destination. A control that jumps an unknown number of weeks
+            to an unknown event is one people stop pressing. */}
         <div className="time-controls">
           <button onClick={() => session.advance(1)}>+1 week</button>
-          <button className="primary" onClick={() => session.advanceToNextDecision()}>
+          <button
+            className="primary"
+            title={
+              nextArrival
+                ? `Skips ${describeRemaining(nextArrival, session.turn)} to the next arrival`
+                : 'Nothing is pending — skips a few quiet weeks'
+            }
+            onClick={() => session.advanceToNextDecision()}
+          >
             Next decision
+            {nextArrival && (
+              <span className="muted small"> · {describeRemaining(nextArrival, session.turn)}</span>
+            )}
           </button>
           <button onClick={() => session.advanceSeason()}>+ a season</button>
         </div>
       </header>
+
+      <InFlight session={session} />
 
       <nav>
         <button className={screen === 'rehab' ? 'on' : ''} onClick={() => setScreen('rehab')}>

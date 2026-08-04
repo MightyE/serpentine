@@ -17,6 +17,7 @@
  * just visibly worse, before you commit, which is the only form of a lesson a game can teach.
  */
 import { useState } from 'react'
+import { describeRemaining } from '../game/gates'
 import { percent, type Session } from '../game/session'
 import type { SnakeRecord } from '../game/roster'
 import { GenomeCard } from './GenomeCard'
@@ -27,6 +28,13 @@ function relatednessNote(f: number): { tone: string; text: string } {
   if (f < 0.125) return { tone: 'warn', text: 'Related — think cousins. The hidden recessives start to line up.' }
   if (f < 0.25) return { tone: 'warn', text: 'Half sibs, or thereabouts. Noticeably fewer eggs will hatch.' }
   return { tone: 'bad', text: 'Full sibs, or a parent bred back to its own offspring. This is how a line narrows.' }
+}
+
+/** The suffix on a picker option for an animal that cannot be paired right now, or nothing. */
+function availability(session: Session, record: SnakeRecord): string {
+  const growing = session.maturityGateOf(record.individual.id)
+  if (growing) return ` — growing, ${describeRemaining(growing, session.turn)}`
+  return session.unavailableReason(record) ? ' — already paired' : ''
 }
 
 export interface BreedingProps {
@@ -109,11 +117,15 @@ export function Breeding({ session, onHatched }: BreedingProps) {
             </div>
           )}
 
+          {/* The gates, before you commit. These are the weeks this decision costs, and they are
+              the reason it is a decision: the female is committed for the whole of it. */}
           <div className="gates">
             <span>Pairing: {preview.receptivity}</span>
             <span>Incubation: {preview.incubation}</span>
+            <span>Hatchlings in: {preview.totalWait}</span>
             <span className="muted small">
-              Ranges, always — you can plan against a range. In this build they resolve immediately.
+              Ranges, always — you can plan against a range. Time moves when you move it; nothing
+              here runs while you are away.
             </span>
           </div>
 
@@ -121,7 +133,7 @@ export function Breeding({ session, onHatched }: BreedingProps) {
             className="primary big"
             onClick={() => onHatched(session.breed(preview.mother!.individual.id, preview.father!.individual.id))}
           >
-            Pair {preview.mother.name} with {preview.father.name}
+            Introduce {preview.mother.name} to {preview.father.name}
           </button>
         </>
       )}
@@ -149,9 +161,12 @@ function Picker({
         {label}
         <select value={value ?? ''} onChange={(e) => onChange(e.target.value || null)}>
           <option value="">— choose —</option>
+          {/* Unavailable animals stay in the list, marked. Removing them would hide the two most
+              interesting facts on this screen — who is growing, and who is already committed. */}
           {residents.map((r) => (
             <option key={r.individual.id} value={r.individual.id}>
               {r.name} ({session.sexOf(r) === 'female' ? '♀' : '♂'})
+              {availability(session, r)}
             </option>
           ))}
         </select>

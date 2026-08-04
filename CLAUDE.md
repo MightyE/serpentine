@@ -111,6 +111,27 @@ Two things the session owns that nothing else does:
   rather than hanging the browser. `Session.beliefAt` narrows the species to a single locus first.
   That is also the only form of the question a player ever asks.
 
+## Time gates
+
+Pairing (1–6 weeks), incubation (8–9) and growth to maturity (34–78 male, 104–156 female) are
+**live**, and they are **turn-based only**. One turn is one in-game week; nothing in `src/game/`
+may read `Date.now()`, and `session.ts` advances gates only when the player advances the clock.
+The model is `src/game/gates.ts` (the clock) and `session.ts`'s `settleGates` (the consequence) —
+keep that split, it is why a gate can carry a mechanic that did not exist when it was written.
+
+Three things to know before you touch this:
+
+- **`Session`'s default `gateMode` is `'timed'`.** A test that wants a hatchling without clicking
+  through fifteen weeks passes `{ gateMode: 'instant' }`, which sets every gate's duration to zero
+  and leaves everything else identical. `session.test.ts`'s `instantSession()` is the convention.
+  Do not add a second breeding path for tests.
+- **Every duration is shown as a bounded range before you commit, and never as `???`.** That is
+  principle 6 of the balance charter and it is not negotiable. `describeBand` and
+  `describeRemaining` exist so no screen has to format a wait by hand.
+- **`gates` and the clutches they carry are saved.** `Session.toSaveFile()` / `new Session({
+  restore })`, round-tripped in `save.test.ts`. A save that loses a pending clutch loses a
+  decision the player made fifteen weeks ago; treat that test as load-bearing.
+
 ## Cheat mode
 
 Name any snake **`Gregor Mendel`** and a "Lab notebook" tab appears. It acts on the live game, and

@@ -21,6 +21,9 @@ import type { SnakeRecord } from './roster'
 import type { GameState } from './game'
 import type { FlagValue } from './seams'
 import { deserializeStore, serializeStore, type StoreSave, type StoreState } from './placement'
+// Type-only, and deliberately so: it is erased at build time, so the session may keep importing
+// this file for `deserializeGame` without the two of them forming a runtime cycle.
+import type { InFlightSave } from './session'
 
 export const SAVE_SCHEMA_VERSION = 1
 
@@ -41,6 +44,19 @@ export interface SaveFile {
    * and it is why this did not need a migration.
    */
   readonly store?: StoreSave
+  /**
+   * The time gates still ticking, and the clutches they are carrying.
+   *
+   * **Optional, and the schema version did not move**, for the same reason as `store`: it lives on
+   * the `Session` rather than on `GameState`, and a save written before gates existed loads as a
+   * game with nothing in flight rather than as an error.
+   *
+   * It is also the field this file most has to get right. A save that drops a pending clutch
+   * loses a pairing the player committed to fifteen weeks ago and cannot get back, and a game
+   * that does that once is a game whose saves nobody trusts again. `Session.toSaveFile` writes it;
+   * `new Session({ restore })` reads it; `save.test.ts` round-trips a clutch mid-incubation.
+   */
+  readonly inFlight?: InFlightSave
 }
 
 export function serializeGame(game: GameState, store?: StoreSave): SaveFile {

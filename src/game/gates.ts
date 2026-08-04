@@ -24,13 +24,20 @@
  * `MAX_DECISIONS_PER_GENERATION` decisions per generation, at least `MIN_TURNS_PER_DECISION`
  * turns skipped per decision.
  *
+ * ## This file is the clock, not the consequence
+ *
+ * A `Gate` knows when it resolves and nothing about what resolving *means*. Laying a clutch,
+ * hatching one, and an animal finishing growing all live in `session.ts`, which holds the payload
+ * each gate is carrying. Keeping the timing separable is what lets the same three lines of
+ * arithmetic serve a mechanic that did not exist when they were written.
+ *
  * ## Instant mode
  *
- * {@link GateMode} `'instant'` is the default in this build. Gates still exist, are still shown,
- * and still report their bands — but they resolve on the turn they are opened, so nothing blocks
- * a first-time player between choosing a pairing and holding the hatchling. That is a deliberate
- * scope decision for the first playable milestone, not a claim that gating is a bad idea; flip
- * a session to `'timed'` and the same gates start costing weeks with no other change.
+ * {@link GateMode} `'timed'` is the default: gates cost the weeks they say they cost. `'instant'`
+ * makes every gate resolve on the turn it opens — still declared, still shown, still reporting
+ * its band, just with a duration of zero. That is what cheat mode flips, and what a test that is
+ * measuring genetics rather than pacing asks for, so it does not have to click through fifteen
+ * weeks to reach a hatchling.
  */
 import { makeRng } from '../lib/rng'
 import type { Sex } from '../genetics/types'
@@ -87,12 +94,23 @@ export function describeBand(band: GateBand): string {
   return `${weeks} ${band.max === 1 ? 'week' : 'weeks'}`
 }
 
+/** "3 weeks", "1 week", "this week". The countdown next to the band, never instead of it. */
+export function describeRemaining(gate: Gate, turn: number): string {
+  const left = remainingTurns(gate, turn)
+  if (left <= 0) return 'this week'
+  return `${left} ${left === 1 ? 'week' : 'weeks'}`
+}
+
+export function remainingTurns(gate: Gate, turn: number): number {
+  return Math.max(0, gate.resolvesTurn - turn)
+}
+
 /**
  * Draw this gate's duration.
  *
  * Seeded from the gate's own id, per the engine's rule that anything about an event derives
  * from that event's seed — so the same clutch always incubates for the same number of weeks,
- * however many times the value is recomputed, and a save file never has to store it.
+ * however many times the value is recomputed, and a save file never has to re-roll it.
  */
 export function gateDuration(band: GateBand, gateId: string, mode: GateMode): number {
   if (mode === 'instant') return 0
@@ -118,13 +136,27 @@ export function isResolved(gate: Gate, turn: number): boolean {
 /**
  * How many turns to skip to reach the next thing that asks the player a question.
  *
- * With gates pending, that is the soonest one resolving. With none pending it is
- * `MIN_TURNS_PER_DECISION`, which is the floor the balance charter holds this control to: a
- * "next decision" button that advanced one turn would be an "end turn" button with a longer
- * label.
+ * With gates pending, that is the soonest one resolving — **exactly** it, so the turn the button
+ * lands on is a turn where something arrives rather than one somewhere near it. Landing near an
+ * arrival is the failure this control exists to prevent: a "next decision" that puts you a week
+ * short of the hatch has charged you a click for nothing and made you press it again.
+ *
+ * With nothing pending there is nothing to wait for, so every turn is equally a decision turn and
+ * the answer is `MIN_TURNS_PER_DECISION` — the floor the balance charter holds this control to. A
+ * "next decision" button that advanced one turn would be an "end turn" button with a longer label.
  */
 export function turnsToNextDecision(gates: readonly Gate[], turn: number): number {
   const pending = gates.filter((g) => !isResolved(g, turn)).map((g) => g.resolvesTurn - turn)
   if (pending.length === 0) return MIN_TURNS_PER_DECISION
   return Math.max(1, Math.min(...pending))
+}
+
+/** The gate that will resolve first, for the label on the button. `undefined` when idle. */
+export function soonestGate(gates: readonly Gate[], turn: number): Gate | undefined {
+  let soonest: Gate | undefined
+  for (const gate of gates) {
+    if (isResolved(gate, turn)) continue
+    if (!soonest || gate.resolvesTurn < soonest.resolvesTurn) soonest = gate
+  }
+  return soonest
 }

@@ -150,11 +150,40 @@ export const CHEATS: readonly Cheat[] = [
   {
     id: 'mature',
     label: 'Mature everything, now',
-    describe: 'Resolves every pending gate: eggs hatch, hatchlings finish growing.',
+    describe:
+      'Resolves every pending gate where it stands: pairs produce their clutch, eggs hatch, ' +
+      'hatchlings finish growing. The gates happen — they are not thrown away.',
     run: (session) => {
-      const pending = session.pendingGates().length
-      session.resolveAllGates()
-      return pending === 0 ? 'Nothing was waiting.' : `Resolved ${pending} pending gate(s).`
+      const resolved = session.resolveAllGates()
+      return resolved === 0 ? 'Nothing was waiting.' : `Resolved ${resolved} pending gate(s).`
+    },
+  },
+  {
+    id: 'skip-gate',
+    label: 'Skip the next wait',
+    describe:
+      'Resolves only the thing due soonest — this clutch, this pairing, this hatchling growing ' +
+      'up — and leaves everything else ticking. The impatient version of pressing “next decision”.',
+    run: (session) => {
+      const next = session.nextArrival()
+      if (!next) return 'Nothing was waiting.'
+      session.resolveNextGate()
+      return `Skipped the ${next.kind} gate on ${next.subject}.`
+    },
+  },
+  {
+    id: 'no-waiting',
+    label: 'Turn the waiting off (or back on)',
+    describe:
+      'Flips the whole session between timed gates and instant ones. Instant means every gate ' +
+      'still exists, still declares its range, and simply costs zero weeks — so the loop can be ' +
+      'exercised end to end without editing a single constant in tuning.ts.',
+    run: (session) => {
+      const next = session.gateMode === 'timed' ? 'instant' : 'timed'
+      session.setGateMode(next)
+      return next === 'instant'
+        ? 'Gates are instant. Pair anything and the hatchlings are there.'
+        : 'Gates are back on the clock.'
     },
   },
   {
@@ -311,7 +340,13 @@ function rerollClutch(session: Session, selected: SnakeRecord | undefined, argum
     )
   if (!mate) throw new Error(`Nothing on the roster can pair with ${selected.name}.`)
   const babies = session.breed(selected.individual.id, mate.individual.id, seed)
-  return `Re-rolled with seed “${seed}” — ${babies.map((b) => b.name).join(', ') || 'no hatchlings'}.`
+  if (babies.length > 0) return `Re-rolled with seed “${seed}” — ${babies.map((b) => b.name).join(', ')}.`
+  // With gates on the clock, a re-roll schedules rather than hatches. Say so rather than
+  // reporting "no hatchlings", which is a different and much more alarming thing.
+  const pending = session.inFlight().find((item) => item.kind === 'receptivity')
+  return pending
+    ? `Re-rolled with seed “${seed}” — paired, and a clutch is due in ${pending.remaining}.`
+    : `Re-rolled with seed “${seed}” — no hatchlings.`
 }
 
 // ---------------------------------------------------------------------------

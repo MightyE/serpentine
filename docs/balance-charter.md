@@ -297,3 +297,17 @@ input cost scales with decisions rather than with turns. With that, the answer h
 only creates a scheduling decision if there's a breeding season it can push you past. Recorded so
 that if the receptivity window ever gets cut, the variance gets simplified away with it rather than
 quietly persisting as noise.
+
+**2026-08-04 — The gates are on by default.** No constant moved: `Session`'s default `gateMode`
+went from `'instant'` to `'timed'`, so pairing (1–6 weeks), incubation (8–9) and growth to maturity
+now cost the weeks `tuning.ts` always said they cost. Tests that measure genetics rather than pacing
+opt back into `'instant'` — that switch is what stops a long gate from becoming pressure to edit the
+constants, which is what this charter is protecting.
+
+**2026-08-04 — Owed, and named here so it is not forgotten: the breeding season is still not
+implemented.** `BREEDING_SEASON_FIRST_WEEK`/`LAST_WEEK` exist as constants and nothing reads them,
+which by this log's own entry above means the incubation variance shipped today is *decoration* —
+there is no window a late hatch can push you past. The gates are still worth having without it
+(a committed female is a real opportunity cost, and that alone is what makes a pairing a decision),
+but the variance does not earn its keep until the window does. Either implement the window or
+simplify `INCUBATION_WEEKS` to a single number; do not leave it in this state indefinitely.

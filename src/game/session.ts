@@ -43,17 +43,22 @@ import { breedPair, clutchSeed } from './breeding'
 import { createGame, type GameState } from './game'
 import {
   describeBand,
+  describeRemaining,
   incubationBand,
   isResolved,
   maturityBand,
   openGate,
   receptivityBand,
+  remainingTurns,
+  soonestGate,
   turnsToNextDecision,
   type Gate,
+  type GateKind,
   type GateMode,
 } from './gates'
 import { isLoadLocus, makeLoadPool, playableSpecies } from './loadPool'
 import { estimateValue, sellSnake, unitsAbsorbed, type SaturationLedger } from './market'
+import { deserializeGame, serializeGame, storeFromSave, type SaveFile } from './save'
 import {
   canPlace,
   habitatOf,
@@ -76,7 +81,6 @@ import {
   GENE_TEST_COST,
   WEEKS_PER_YEAR,
   WEEKS_TO_MATURITY_FEMALE,
-  WEEKS_TO_MATURITY_MALE,
 } from './tuning'
 
 // ---------------------------------------------------------------------------
@@ -101,12 +105,91 @@ function loadSpecies(): Record<string, LoadedSpecies> {
 }
 
 // ---------------------------------------------------------------------------
+// Work in flight — what a gate is carrying while it ticks
+// ---------------------------------------------------------------------------
+
+/**
+ * Arrivals, as events rather than as numbers that quietly changed.
+ *
+ * A clutch that hatches while the player is on the market screen has to *announce itself* — a
+ * gate whose only trace is a card appearing somewhere you were not looking is indistinguishable
+ * from nothing having happened, and waiting is only tolerable when the arrival lands.
+ */
+declare module './seams' {
+  interface GameEventMap {
+    /** A pair was put together. The clutch, if there is one, comes later. */
+    'pairing.introduced': { motherId: string; fatherId: string; resolvesTurn: number }
+    /**
+     * A pairing came to nothing because one of the pair left the collection before the clutch
+     * was laid. Not a failure of the animals — bookkeeping, reported rather than swallowed.
+     */
+    'pairing.lapsed': { motherId: string; fatherId: string; reason: string }
+    /** An animal finished growing and can now be bred. */
+    'snake.matured': { individualId: string }
+  }
+}
+
+/**
+ * A clutch in flight: everything needed to finish it on a later turn.
+ *
+ * Held beside the gate rather than inside it, because `gates.ts` is deliberately the clock and
+ * not the consequence — a `Gate` knows when it resolves and nothing about what resolving means.
+ * Keyed by gate id, and re-keyed when the clutch moves from receptivity to incubation.
+ *
+ * `mother` and `father` are absent while the pair is only introduced, and are filled in with the
+ * parents **as they were at laying**. That is what makes selling the sire during incubation a
+ * normal thing that happens rather than a clutch that silently vanishes: eggs already laid do
+ * not un-lay. It is also all plain data, so the whole thing goes into a save file as it stands.
+ */
+export interface ClutchPlan {
+  readonly gateId: string
+  readonly motherId: IndividualId
+  readonly fatherId: IndividualId
+  readonly clutchIndex: number
+  readonly clutchSize: number
+  readonly seed: string
+  readonly mother?: Individual
+  readonly father?: Individual
+}
+
+/** One row of the "what am I waiting for" panel. Every field is already a string to show. */
+export interface InFlightItem {
+  readonly id: string
+  readonly kind: GateKind
+  /** "Clutch", "Pairing", "Growing". */
+  readonly label: string
+  /** Who it is about — "Noodle × Biscuit", or an animal's name. */
+  readonly subject: string
+  /** The declared band, always. "8–9 weeks". Never `???`. */
+  readonly band: string
+  /** The countdown, next to the band and never instead of it. "3 weeks". */
+  readonly remaining: string
+  readonly remainingTurns: number
+  readonly resolvesTurn: number
+  /** 0..1 through the wait. A bar is how you see at a glance which of five things is nearly done. */
+  readonly progress: number
+}
+
+/** The in-flight half of a save file: the ticking gates and what each is carrying. */
+export interface InFlightSave {
+  readonly gates: readonly Gate[]
+  readonly clutches: readonly ClutchPlan[]
+}
+
+// ---------------------------------------------------------------------------
 // Session
 // ---------------------------------------------------------------------------
 
 export interface SessionOptions {
   readonly worldSeed?: string
+  /**
+   * `'timed'` — the default, and the game as designed. `'instant'` collapses every gate to zero
+   * turns, which is what cheat mode flips and what a test measuring genetics rather than pacing
+   * asks for so it does not have to click through fifteen weeks to reach a hatchling.
+   */
   readonly gateMode?: GateMode
+  /** Resume a saved game instead of starting one. See {@link Session.toSaveFile}. */
+  readonly restore?: SaveFile
   /**
    * Eggs per clutch. One, for the first playable milestone — "breed X and Y, get a baby" is the
    * loop, and six cards to read on the first hatch is six times the reading before the loop has
@@ -134,13 +217,26 @@ export interface PairingPreview {
   readonly nonViableReasons: readonly { value: string; probability: number }[]
   readonly incubation: string
   readonly receptivity: string
+  /**
+   * Both gates added up: how long from committing this pairing to holding hatchlings.
+   *
+   * The number a player actually schedules against — "do I start this now, or wait?" — and the
+   * reason it is computed here rather than left as two bands to add up in your head.
+   */
+  readonly totalWait: string
 }
 
 export class Session {
   readonly state: GameState
   readonly species: Record<string, LoadedSpecies>
   readonly saturation: SaturationLedger = {}
-  readonly gateMode: GateMode
+  /**
+   * Not `readonly`, for exactly one reason: {@link setGateMode}. Cheat mode is allowed to turn
+   * the waiting off for the rest of a session, which is the outlet that makes editing the
+   * constants in `tuning.ts` unnecessary — and the constants are what the balance invariants
+   * protect. Nothing else assigns it.
+   */
+  gateMode: GateMode
   readonly clutchSize: number
 
   /**
@@ -155,14 +251,44 @@ export class Session {
 
   /** Evidence, by individual. Belief is recomputed from this; see the file header. */
   private readonly evidence: Record<IndividualId, Evidence[]> = {}
+  /**
+   * Every gate still ticking. **This is the state, not a cache.**
+   *
+   * A resolved gate is removed as it resolves, so "is this animal grown?" is answered by the
+   * absence of its maturity gate rather than by a second stored flag that could disagree. That is
+   * also why the list goes into the save file: a save that dropped it would hatch nothing, and a
+   * save that loses a pending clutch is the kind of bug that destroys trust in a game.
+   */
   private gates: Gate[] = []
+  /** What each pending clutch gate is carrying, by gate id. See {@link ClutchPlan}. */
+  private clutches: Record<string, ClutchPlan> = {}
   private listeners = new Set<() => void>()
 
   constructor(options: SessionOptions = {}) {
-    this.state = createGame(options.worldSeed ?? 'serpentine')
+    const save = options.restore
+    this.state = save ? deserializeGame(save) : createGame(options.worldSeed ?? 'serpentine')
     this.species = loadSpecies()
-    this.gateMode = options.gateMode ?? 'instant'
+    this.gateMode = options.gateMode ?? 'timed'
     this.clutchSize = options.clutchSize ?? 1
+    if (save) {
+      this.store = storeFromSave(save) ?? startingStore()
+      this.gates = [...(save.inFlight?.gates ?? [])]
+      for (const plan of save.inFlight?.clutches ?? []) this.clutches[plan.gateId] = plan
+    }
+  }
+
+  /**
+   * The whole session as plain data: the game, the floor, and everything in flight.
+   *
+   * The in-flight half is why this lives on the session rather than being `serializeGame` alone —
+   * gates and the clutches they carry are a *playing game's* state, the way the store floor is,
+   * and neither belongs to `GameState`.
+   */
+  toSaveFile(): SaveFile {
+    return {
+      ...serializeGame(this.state, this.store),
+      inFlight: { gates: [...this.gates], clutches: Object.values(this.clutches) },
+    }
   }
 
   // -- reactivity ------------------------------------------------------------
@@ -230,12 +356,58 @@ export class Session {
     return expressedLoad(record.individual, this.speciesOf(record).pool)
   }
 
-  /** Age 0..1 for the renderer: a hatchling grows into its adult proportions over the turns. */
+  /**
+   * Age 0..1 for the renderer: a hatchling grows into its adult proportions over the turns.
+   *
+   * Measured against **this animal's own maturity gate**, not against the band it was drawn from,
+   * so the moment the renderer finishes growing it is the same week the game says it is grown.
+   * Two clocks here would be two clocks to disagree.
+   */
   ageOf(record: SnakeRecord): number {
-    if (record.source !== 'bred') return 1
-    const band = this.sexOf(record) === 'female' ? WEEKS_TO_MATURITY_FEMALE : WEEKS_TO_MATURITY_MALE
-    const elapsed = this.turn - record.acquiredTurn
-    return Math.max(0, Math.min(1, elapsed / band[0]))
+    const gate = this.maturityGateOf(record.individual.id)
+    if (!gate) return 1
+    const span = gate.resolvesTurn - gate.openedTurn
+    if (span <= 0) return 1
+    return Math.max(0, Math.min(1, (this.turn - gate.openedTurn) / span))
+  }
+
+  /** The growth gate this animal is still under, if any. Its absence *is* being grown. */
+  maturityGateOf(id: IndividualId): Gate | undefined {
+    return this.gates.find(
+      (gate) => gate.kind === 'maturity' && gate.subject === id && !isResolved(gate, this.turn),
+    )
+  }
+
+  /** Old enough to breed. Anything that arrived from outside the rescue already is. */
+  isMature(record: SnakeRecord): boolean {
+    return this.maturityGateOf(record.individual.id) === undefined
+  }
+
+  /**
+   * Why this animal cannot be paired right now, in words, or `undefined` if it can.
+   *
+   * Two reasons, and both are gates: it is still growing, or it is already committed to a clutch.
+   * A female stays committed until her eggs hatch; a male only until the pair produces them,
+   * because a male servicing another female next week is a normal thing and forbidding it would
+   * be a game rule wearing biology's clothes.
+   */
+  unavailableReason(record: SnakeRecord): string | undefined {
+    const growing = this.maturityGateOf(record.individual.id)
+    if (growing) {
+      return `${record.name} is still growing — breeding age in ${describeRemaining(growing, this.turn)}.`
+    }
+    for (const plan of Object.values(this.clutches)) {
+      const laid = plan.mother !== undefined
+      if (plan.motherId === record.individual.id) {
+        return laid
+          ? `${record.name} has a clutch incubating. She can be paired again once it hatches.`
+          : `${record.name} is already paired. Give them the season.`
+      }
+      if (!laid && plan.fatherId === record.individual.id) {
+        return `${record.name} is already paired. Give them the season.`
+      }
+    }
+    return undefined
   }
 
   valueOf(record: SnakeRecord): number {
@@ -346,6 +518,12 @@ export class Session {
       nonViableReasons: [],
       incubation: describeBand(incubationBand()),
       receptivity: describeBand(receptivityBand()),
+      totalWait: describeBand({
+        kind: 'incubation',
+        label: 'From pairing to hatch',
+        min: receptivityBand().min + incubationBand().min,
+        max: receptivityBand().max + incubationBand().max,
+      }),
     }
     const a = aId ? this.state.roster.get(aId) : undefined
     const b = bId ? this.state.roster.get(bId) : undefined
@@ -371,6 +549,13 @@ export class Session {
         father: b,
         check: { ok: false, reason: `Both of these are ${sexA}. A pairing needs one of each.` },
       }
+    }
+
+    // The growth and receptivity gates, as a refusal you can act on rather than a greyed-out
+    // button. "Six more weeks" is a plan; a disabled control is a shrug.
+    for (const candidate of [a, b]) {
+      const reason = this.unavailableReason(candidate)
+      if (reason) return { ...empty, mother: a, father: b, check: { ok: false, reason } }
     }
 
     const mother = sexA === 'female' ? a : b
@@ -501,11 +686,14 @@ export class Session {
   }
 
   /**
-   * Breed a pairing, right now.
+   * Commit a pairing: put the two together and open the receptivity gate.
    *
-   * Opens the incubation gate as it goes — in `'instant'` mode that gate resolves on the turn it
-   * opens, which is why a hatchling is on the roster by the time this returns. Flip the session
-   * to `'timed'` and the same call schedules instead.
+   * **Returns the hatchlings only when they actually arrive on this turn**, which in `'timed'`
+   * mode they do not — the pair takes `PAIRING_RECEPTIVITY_WEEKS` to produce a clutch and the
+   * clutch takes `INCUBATION_WEEKS` to hatch, and both of those are weeks the player has to
+   * spend. In `'instant'` mode every gate has a duration of zero, so the whole chain settles
+   * before this returns and the hatchlings come back from the same call. Same code path either
+   * way; the only difference is the durations, which is exactly what cheat mode wants to flip.
    */
   breed(motherId: IndividualId, fatherId: IndividualId, seedOverride?: string): readonly SnakeRecord[] {
     const preview = this.previewPairing(motherId, fatherId)
@@ -513,29 +701,134 @@ export class Session {
       throw new Error(`breed: ${preview.check.reason ?? 'this pairing is not possible'}`)
     }
     const { mother, father } = preview
-    const species = this.speciesOf(mother)
     const clutchIndex = this.state.flags.bump('clutchesAttempted')
+    const gate = openGate(
+      'receptivity',
+      `${mother.individual.id}:${clutchIndex}`,
+      receptivityBand(),
+      this.turn,
+      this.gateMode,
+    )
+    this.gates.push(gate)
+    this.clutches[gate.id] = {
+      gateId: gate.id,
+      motherId: mother.individual.id,
+      fatherId: father.individual.id,
+      clutchIndex,
+      clutchSize: this.clutchSize,
+      seed:
+        seedOverride ??
+        clutchSeed(this.state.worldSeed, mother.individual.id, father.individual.id, clutchIndex),
+    }
+    this.state.bus.emit('pairing.introduced', {
+      motherId: mother.individual.id,
+      fatherId: father.individual.id,
+      resolvesTurn: gate.resolvesTurn,
+    })
+
+    const arrived = this.settleGates()
+    this.changed()
+    return arrived
+  }
+
+  // -- gates -----------------------------------------------------------------
+
+  /**
+   * Run every gate that has come due, and every gate those open in turn.
+   *
+   * The loop is what makes `'instant'` mode a mode rather than a second code path: a zero-length
+   * receptivity gate opens a zero-length incubation gate on the same turn, which opens zero-length
+   * maturity gates, and all three settle in three passes of the same function that would have
+   * taken fifteen weeks. The bound is a guard against a gate that opens itself, which would
+   * otherwise be an infinite loop inside a click handler.
+   */
+  private settleGates(): SnakeRecord[] {
+    const arrived: SnakeRecord[] = []
+    for (let pass = 0; pass < 8; pass++) {
+      const due = this.gates.filter((gate) => isResolved(gate, this.turn))
+      if (due.length === 0) break
+      this.gates = this.gates.filter((gate) => !isResolved(gate, this.turn))
+      for (const gate of due) arrived.push(...this.resolveGate(gate))
+    }
+    return arrived
+  }
+
+  private resolveGate(gate: Gate): readonly SnakeRecord[] {
+    if (gate.kind === 'receptivity') return this.layClutch(gate)
+    if (gate.kind === 'incubation') return this.hatchClutch(gate)
+    this.state.bus.emit('snake.matured', { individualId: gate.subject })
+    return []
+  }
+
+  /**
+   * The pair took. Eggs exist; nothing is known about them yet.
+   *
+   * Note what is *not* here: the engine is not asked for the clutch until it hatches. The seed is
+   * fixed at pairing, so the clutch is already determined — but computing it later means a save
+   * written mid-incubation carries a seed rather than a pile of unborn genotypes, and a fixed
+   * inheritance bug reaches an in-flight clutch instead of being baked into it. Same rule as
+   * evidence versus belief, one layer up.
+   */
+  private layClutch(gate: Gate): readonly SnakeRecord[] {
+    const plan = this.clutches[gate.id]
+    delete this.clutches[gate.id]
+    if (!plan) return []
+
+    const mother = this.state.roster.get(plan.motherId)
+    const father = this.state.roster.get(plan.fatherId)
+    if (!mother || !father) {
+      this.state.bus.emit('pairing.lapsed', {
+        motherId: plan.motherId,
+        fatherId: plan.fatherId,
+        reason: 'One of the pair left the collection before there was a clutch.',
+      })
+      return []
+    }
+
+    const next = openGate(
+      'incubation',
+      `${plan.motherId}:${plan.clutchIndex}`,
+      incubationBand(),
+      this.turn,
+      this.gateMode,
+    )
+    this.gates.push(next)
+    this.clutches[next.id] = {
+      ...plan,
+      gateId: next.id,
+      mother: mother.individual,
+      father: father.individual,
+    }
+    this.state.bus.emit('clutch.laid', {
+      motherId: plan.motherId,
+      fatherId: plan.fatherId,
+      eggCount: plan.clutchSize,
+      clutchSeed: plan.seed,
+    })
+    return []
+  }
+
+  /** The clutch hatches: the engine runs, the roster grows, and each hatchling starts growing. */
+  private hatchClutch(gate: Gate): readonly SnakeRecord[] {
+    const plan = this.clutches[gate.id]
+    delete this.clutches[gate.id]
+    if (!plan) return []
+    // Snapshotted at laying, so an animal sold during incubation cannot take the clutch with it.
+    const mother = plan.mother ?? this.state.roster.get(plan.motherId)?.individual
+    const father = plan.father ?? this.state.roster.get(plan.fatherId)?.individual
+    if (!mother || !father) return []
+    const species = this.species[mother.species]
+    if (!species) return []
 
     const before = new Set(this.state.roster.all().map((r) => r.individual.id))
     breedPair(
       geneticsEngine,
       species.playable,
-      {
-        mother: mother.individual,
-        father: father.individual,
-        clutchSize: this.clutchSize,
-        seed:
-          seedOverride ??
-          clutchSeed(this.state.worldSeed, mother.individual.id, father.individual.id, clutchIndex),
-      },
+      { mother, father, clutchSize: plan.clutchSize, seed: plan.seed },
       this.state.roster,
       this.state.bus,
       this.state.flags,
       this.turn,
-    )
-
-    this.gates.push(
-      openGate('incubation', `${mother.individual.id}:${clutchIndex}`, incubationBand(), this.turn, this.gateMode),
     )
 
     const hatchlings: SnakeRecord[] = []
@@ -555,8 +848,8 @@ export class Session {
       this.state.roster.add(finished)
       this.noteEvidence(record.individual.id, {
         kind: 'parentage',
-        mother: mother.individual.id,
-        father: father.individual.id,
+        mother: mother.id,
+        father: father.id,
       })
       this.noteEvidence(record.individual.id, {
         kind: 'observedPhenotype',
@@ -567,8 +860,6 @@ export class Session {
       )
       hatchlings.push(finished)
     }
-
-    this.changed()
     return hatchlings
   }
 
@@ -728,12 +1019,22 @@ export class Session {
 
   // -- time ------------------------------------------------------------------
 
+  /**
+   * Move the clock. Gates settle **turn by turn**, not once at the end.
+   *
+   * That ordering is load-bearing rather than tidy: a clutch laid on week 3 has to start
+   * incubating on week 3, so advancing twenty weeks in one call has to produce the same state as
+   * twenty separate weeks. Settling only at the destination would make the length of a jump
+   * change the outcome, which is the sort of bug that shows up as "the hatchlings are late when I
+   * use the season button".
+   */
   advance(turns = 1): number {
-    let turn = this.turn
-    for (let i = 0; i < turns; i++) turn = advanceTurn(this.state.flags, this.state.bus)
-    this.gates = this.gates.filter((gate) => !isResolved(gate, turn))
+    for (let i = 0; i < turns; i++) {
+      advanceTurn(this.state.flags, this.state.bus)
+      this.settleGates()
+    }
     this.changed()
-    return turn
+    return this.turn
   }
 
   /**
@@ -754,10 +1055,56 @@ export class Session {
     return this.advance(Math.round(WEEKS_PER_YEAR / 4))
   }
 
-  /** Cheat mode's "mature everything, now". Every pending gate resolves where it stands. */
-  resolveAllGates(): void {
-    this.gates = []
+  /**
+   * The gate the "next decision" button is aiming at, for its label. `undefined` when idle.
+   *
+   * A button that skips an unknown number of weeks to an unknown event is a button people stop
+   * pressing. Naming the destination is what makes a long skip feel like a decision rather than
+   * a dice roll.
+   */
+  nextArrival(): Gate | undefined {
+    return soonestGate(this.gates, this.turn)
+  }
+
+  /**
+   * Cheat mode's "mature everything, now" — every pending gate resolves **where it stands**.
+   *
+   * It pulls the gates forward to this turn and runs them, rather than deleting them: a cheat
+   * that dropped the list would silently throw away every clutch in incubation, which is the
+   * opposite of what "mature everything" promises. Skipping a gate has to mean the gate happened.
+   */
+  resolveAllGates(): number {
+    return this.skipGates(this.gates)
+  }
+
+  /**
+   * Turn the waiting off (or back on) for the rest of this session.
+   *
+   * Switching to `'instant'` settles what is already pending as well, because a mode that only
+   * applied to gates opened after the switch would leave the eight weeks you were trying to skip
+   * exactly where they were.
+   */
+  setGateMode(mode: GateMode): void {
+    this.gateMode = mode
+    if (mode === 'instant') this.resolveAllGates()
     this.changed()
+  }
+
+  /** Skip just the next thing due. The fine-grained version of {@link resolveAllGates}. */
+  resolveNextGate(): number {
+    const next = this.nextArrival()
+    return next ? this.skipGates([next]) : 0
+  }
+
+  private skipGates(gates: readonly Gate[]): number {
+    const skipping = new Set(gates.map((gate) => gate.id))
+    if (skipping.size === 0) return 0
+    this.gates = this.gates.map((gate) =>
+      skipping.has(gate.id) ? { ...gate, resolvesTurn: this.turn } : gate,
+    )
+    this.settleGates()
+    this.changed()
+    return skipping.size
   }
 
   /**
@@ -781,6 +1128,54 @@ export class Session {
 
   pendingGates(): readonly Gate[] {
     return this.gates.filter((gate) => !isResolved(gate, this.turn))
+  }
+
+  /**
+   * Everything currently in flight, soonest first, already in words.
+   *
+   * This is the whole of "waiting is only tolerable when you can see what you are waiting for".
+   * Every row carries the declared band *and* the countdown — the band because principle 6 says
+   * the player plans against a range and never against `???`, the countdown because a range you
+   * committed to eight weeks ago is no longer the question you are asking.
+   */
+  inFlight(): readonly InFlightItem[] {
+    const name = (id: IndividualId): string => this.state.roster.get(id)?.name ?? 'a snake since sold'
+    const rows = this.pendingGates().map((gate): InFlightItem => {
+      const plan = this.clutches[gate.id]
+      const span = gate.resolvesTurn - gate.openedTurn
+      const common = {
+        id: gate.id,
+        kind: gate.kind,
+        remaining: describeRemaining(gate, this.turn),
+        remainingTurns: remainingTurns(gate, this.turn),
+        resolvesTurn: gate.resolvesTurn,
+        progress: span <= 0 ? 1 : Math.max(0, Math.min(1, (this.turn - gate.openedTurn) / span)),
+      }
+      if (gate.kind === 'receptivity') {
+        return {
+          ...common,
+          label: 'Paired',
+          subject: plan ? `${name(plan.motherId)} × ${name(plan.fatherId)}` : 'a pairing',
+          band: describeBand(receptivityBand()),
+        }
+      }
+      if (gate.kind === 'incubation') {
+        return {
+          ...common,
+          label: plan ? `${plan.clutchSize} ${plan.clutchSize === 1 ? 'egg' : 'eggs'}` : 'Clutch',
+          subject: plan ? `${name(plan.motherId)} × ${name(plan.fatherId)}` : 'a clutch',
+          band: describeBand(incubationBand()),
+        }
+      }
+      const record = this.state.roster.get(gate.subject)
+      return {
+        ...common,
+        label: 'Growing',
+        subject: record?.name ?? gate.subject,
+        band: describeBand(maturityBand(record ? this.sexOf(record) : 'female')),
+      }
+    })
+    return rows.sort((a, b) => a.resolvesTurn - b.resolvesTurn)
   }
 
   // -- internals -------------------------------------------------------------

@@ -8,7 +8,24 @@
  */
 import { describe, expect, it } from 'vitest'
 import { Session } from './session'
-import { MAX_DECISIONS_PER_GENERATION, MIN_TURNS_PER_DECISION } from './tuning'
+import {
+  INCUBATION_WEEKS,
+  MAX_DECISIONS_PER_GENERATION,
+  MIN_TURNS_PER_DECISION,
+  PAIRING_RECEPTIVITY_WEEKS,
+  WEEKS_TO_MATURITY_MALE,
+} from './tuning'
+
+/**
+ * A session with the gates collapsed to zero turns.
+ *
+ * Used by every test below that is about *genetics* rather than about pacing, so that `breed()`
+ * hands back the clutch it produced instead of a promise fifteen weeks out. The gates are the
+ * subject of exactly one describe block, and it builds its own timed sessions.
+ */
+function instantSession(worldSeed = 'test'): Session {
+  return new Session({ worldSeed, gateMode: 'instant' })
+}
 
 function seededPair(session: Session) {
   // Spawn until there is a breedable pair of the same species. Deterministic, so this either
@@ -22,7 +39,7 @@ function seededPair(session: Session) {
 
 describe('session: the loop', () => {
   it('spawns a snake that can be looked at', () => {
-    const session = new Session({ worldSeed: 'test' })
+    const session = instantSession()
     const record = session.spawnRandom('ball-python')
 
     expect(session.residents()).toHaveLength(1)
@@ -32,7 +49,7 @@ describe('session: the loop', () => {
   })
 
   it('refuses a same-sex pairing with a reason a player can act on', () => {
-    const session = new Session({ worldSeed: 'test' })
+    const session = instantSession()
     for (let i = 0; i < 20; i++) session.spawnRandom('ball-python')
     const females = session.residents().filter((r) => session.sexOf(r) === 'female')
     const preview = session.previewPairing(females[0]!.individual.id, females[1]!.individual.id)
@@ -42,7 +59,7 @@ describe('session: the loop', () => {
   })
 
   it('refuses a cross-species pairing with a reason', () => {
-    const session = new Session({ worldSeed: 'test' })
+    const session = instantSession()
     const a = session.spawnRandom('ball-python')
     const b = session.spawnRandom('corn-snake')
     const preview = session.previewPairing(a.individual.id, b.individual.id)
@@ -52,7 +69,7 @@ describe('session: the loop', () => {
   })
 
   it('shows the punnett prediction before anything is committed', () => {
-    const session = new Session({ worldSeed: 'test' })
+    const session = instantSession()
     const { female, male } = seededPair(session)
     const before = session.residents().length
 
@@ -68,7 +85,7 @@ describe('session: the loop', () => {
   })
 
   it('breeds a pair and the baby derives from its parents', () => {
-    const session = new Session({ worldSeed: 'test' })
+    const session = instantSession()
     const { female, male } = seededPair(session)
 
     const babies = session.breed(female.individual.id, male.individual.id)
@@ -83,7 +100,7 @@ describe('session: the loop', () => {
   })
 
   it("the pairing screen's relatedness is the hatchling's inbreeding coefficient", () => {
-    const session = new Session({ worldSeed: 'test' })
+    const session = instantSession()
     const { female, male } = seededPair(session)
     const preview = session.previewPairing(female.individual.id, male.individual.id)
     const baby = session.breed(female.individual.id, male.individual.id)[0]!
@@ -92,7 +109,7 @@ describe('session: the loop', () => {
   })
 
   it('inbreeding rises when a hatchling is bred back to its parent', () => {
-    const session = new Session({ worldSeed: 'test' })
+    const session = instantSession()
     const { female, male } = seededPair(session)
     const baby = session.breed(female.individual.id, male.individual.id)[0]!
     const parent = session.sexOf(baby) === 'female' ? male : female
@@ -103,7 +120,7 @@ describe('session: the loop', () => {
   })
 
   it('sells a snake, and the second of the same morph fetches less', () => {
-    const session = new Session({ worldSeed: 'test' })
+    const session = instantSession()
     for (let i = 0; i < 30; i++) session.spawnRandom('ball-python')
     const byKey = new Map<string, string[]>()
     for (const r of session.residents()) {
@@ -121,7 +138,7 @@ describe('session: the loop', () => {
   })
 
   it('shows a bounded, visible incubation range — never an unknown', () => {
-    const session = new Session({ worldSeed: 'test' })
+    const session = instantSession()
     const { female, male } = seededPair(session)
     const preview = session.previewPairing(female.individual.id, male.individual.id)
 
@@ -132,7 +149,7 @@ describe('session: the loop', () => {
 
 describe('session: knowledge', () => {
   it('a hatchling out of two carriers is a possible het, with its arithmetic legible', () => {
-    const session = new Session({ worldSeed: 'test' })
+    const session = instantSession()
     const { female, male } = seededPair(session)
     const baby = session.breed(female.individual.id, male.individual.id)[0]!
 
@@ -153,7 +170,7 @@ describe('session: knowledge', () => {
 
 describe('session: time', () => {
   it('advance-to-next-decision skips at least MIN_TURNS_PER_DECISION when nothing is pending', () => {
-    const session = new Session({ worldSeed: 'test' })
+    const session = instantSession()
     const before = session.turn
     session.advanceToNextDecision()
     expect(session.turn - before).toBeGreaterThanOrEqual(MIN_TURNS_PER_DECISION)
@@ -166,7 +183,7 @@ describe('session: time', () => {
     // choose the pairing (1), commit it (2), then skip to whatever asks next.
     let decisions = 2
     session.breed(female.individual.id, male.individual.id)
-    while (session.pendingGates().some((g) => g.kind === 'incubation')) {
+    while (session.pendingGates().some((g) => g.kind !== 'maturity')) {
       session.advanceToNextDecision()
       decisions++
       expect(decisions).toBeLessThanOrEqual(MAX_DECISIONS_PER_GENERATION)
@@ -174,10 +191,163 @@ describe('session: time', () => {
     expect(decisions).toBeLessThanOrEqual(MAX_DECISIONS_PER_GENERATION)
   })
 
+  it('never lands "next decision" on a turn with nothing to decide', () => {
+    // The whole promise of the control: every press arrives at something. A press that puts you
+    // a week short of the hatch has charged a click for nothing.
+    const session = new Session({ worldSeed: 'test', gateMode: 'timed' })
+    const { female, male } = seededPair(session)
+    session.breed(female.individual.id, male.individual.id)
+
+    let presses = 0
+    while (session.pendingGates().length > 0 && presses < 10) {
+      const arrivals: string[] = []
+      const stops = [
+        session.state.bus.on('clutch.laid', () => arrivals.push('laid')),
+        session.state.bus.on('clutch.hatched', () => arrivals.push('hatched')),
+        session.state.bus.on('snake.matured', () => arrivals.push('matured')),
+      ]
+      session.advanceToNextDecision()
+      for (const stop of stops) stop()
+      presses++
+      expect(arrivals.length).toBeGreaterThan(0)
+    }
+    // Pairing, clutch laid, hatch, and each hatchling growing up: every press landed on one.
+    expect(presses).toBeGreaterThanOrEqual(3)
+  })
+
   it('never reads a wall clock', () => {
     // The whole point of turn-based: time only moves when the player moves it.
-    const session = new Session({ worldSeed: 'test' })
+    const session = instantSession()
     const turn = session.turn
     expect(session.turn).toBe(turn)
+  })
+})
+
+describe('session: the gates are real', () => {
+  const timed = (seed = 'gates') => new Session({ worldSeed: seed, gateMode: 'timed' })
+
+  it('takes the pairing gate and then the incubation gate, both inside their declared bands', () => {
+    const session = timed()
+    const { female, male } = seededPair(session)
+
+    expect(session.breed(female.individual.id, male.individual.id)).toHaveLength(0)
+
+    let laidOn: number | undefined
+    let hatchedOn: number | undefined
+    session.state.bus.on('clutch.laid', () => (laidOn = session.turn))
+    session.state.bus.on('clutch.hatched', () => (hatchedOn = session.turn))
+
+    const start = session.turn
+    for (let week = 0; week < 40 && hatchedOn === undefined; week++) session.advance(1)
+
+    expect(laidOn).toBeDefined()
+    expect(hatchedOn).toBeDefined()
+    const receptivity = laidOn! - start
+    const incubation = hatchedOn! - laidOn!
+    expect(receptivity).toBeGreaterThanOrEqual(PAIRING_RECEPTIVITY_WEEKS[0])
+    expect(receptivity).toBeLessThanOrEqual(PAIRING_RECEPTIVITY_WEEKS[1])
+    expect(incubation).toBeGreaterThanOrEqual(INCUBATION_WEEKS[0])
+    expect(incubation).toBeLessThanOrEqual(INCUBATION_WEEKS[1])
+  })
+
+  it('advancing in one jump lands in the same state as advancing week by week', () => {
+    const jump = timed('same')
+    const step = timed('same')
+    for (const session of [jump, step]) {
+      const { female, male } = seededPair(session)
+      session.breed(female.individual.id, male.individual.id)
+    }
+    jump.advance(20)
+    for (let i = 0; i < 20; i++) step.advance(1)
+
+    expect(jump.turn).toBe(step.turn)
+    expect(jump.residents().map((r) => r.individual.id)).toEqual(
+      step.residents().map((r) => r.individual.id),
+    )
+    expect(jump.pendingGates()).toEqual(step.pendingGates())
+  })
+
+  it('keeps a hatchling out of the breeding pool until it has grown, and says how long', () => {
+    const session = timed()
+    const { female, male } = seededPair(session)
+    session.breed(female.individual.id, male.individual.id)
+    session.advance(PAIRING_RECEPTIVITY_WEEKS[1] + INCUBATION_WEEKS[1])
+
+    const baby = session.residents().find((r) => r.source === 'bred')!
+    expect(session.isMature(baby)).toBe(false)
+
+    const parent = session.sexOf(baby) === 'female' ? male : female
+    const refusal = session.previewPairing(baby.individual.id, parent.individual.id)
+    expect(refusal.check.ok).toBe(false)
+    expect(refusal.check.reason).toMatch(/still growing/)
+    // Never `???` — the refusal carries the wait, in weeks.
+    expect(refusal.check.reason).toMatch(/\d+ weeks?/)
+
+    session.advance(WEEKS_TO_MATURITY_MALE[1] + 1)
+    expect(session.isMature(session.record(baby.individual.id)!)).toBe(true)
+  })
+
+  it('shows every wait as a range plus a countdown, and never as an unknown', () => {
+    const session = timed()
+    const { female, male } = seededPair(session)
+    session.breed(female.individual.id, male.individual.id)
+
+    const rows = session.inFlight()
+    expect(rows.length).toBeGreaterThan(0)
+    for (const row of rows) {
+      expect(row.band).toMatch(/^\d+(–\d+)? weeks?$/)
+      expect(row.remaining).toMatch(/^(\d+ weeks?|this week)$/)
+      expect(row.subject).not.toMatch(/\?/)
+    }
+  })
+
+  it('does not lose a clutch when the sire is sold mid-incubation', () => {
+    const session = timed()
+    const { female, male } = seededPair(session)
+    session.breed(female.individual.id, male.individual.id)
+    session.advance(PAIRING_RECEPTIVITY_WEEKS[1])
+    expect(session.pendingGates().some((g) => g.kind === 'incubation')).toBe(true)
+
+    session.sell(male.individual.id)
+    session.advance(INCUBATION_WEEKS[1])
+
+    expect(session.residents().some((r) => r.source === 'bred')).toBe(true)
+  })
+})
+
+describe('session: cheat mode skips gates', () => {
+  it('resolves a pending clutch rather than throwing it away', () => {
+    const session = new Session({ worldSeed: 'cheat', gateMode: 'timed' })
+    const { female, male } = seededPair(session)
+    session.breed(female.individual.id, male.individual.id)
+
+    // Twice: once for the pairing, once for the incubation it opens.
+    expect(session.resolveAllGates()).toBeGreaterThan(0)
+    session.resolveAllGates()
+
+    expect(session.residents().some((r) => r.source === 'bred')).toBe(true)
+    expect(session.turn).toBe(0)
+  })
+
+  it('skips only the next wait, leaving the rest ticking', () => {
+    const session = new Session({ worldSeed: 'cheat-one', gateMode: 'timed' })
+    const { female, male } = seededPair(session)
+    session.breed(female.individual.id, male.individual.id)
+    session.resolveNextGate()
+
+    const pending = session.pendingGates()
+    expect(pending).toHaveLength(1)
+    expect(pending[0]!.kind).toBe('incubation')
+  })
+
+  it('turning the waiting off settles what is already in flight', () => {
+    const session = new Session({ worldSeed: 'cheat-off', gateMode: 'timed' })
+    const { female, male } = seededPair(session)
+    session.breed(female.individual.id, male.individual.id)
+
+    session.setGateMode('instant')
+
+    expect(session.pendingGates()).toHaveLength(0)
+    expect(session.residents().some((r) => r.source === 'bred')).toBe(true)
   })
 })

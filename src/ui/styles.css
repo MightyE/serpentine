@@ -477,6 +477,87 @@ select option {
 }
 
 /* ==========================================================================
+   IN FLIGHT — what you are waiting for, and how long is left of it
+
+   Directly under the header, above the screens, because it has to be readable without deciding
+   to go and look. Every row carries the declared band as well as the countdown: the band is what
+   you planned against, the countdown is what you are living through, and dropping the first turns
+   a schedule back into a surprise.
+   ========================================================================== */
+.in-flight {
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  padding: var(--sp-3) var(--sp-4);
+  display: grid;
+  gap: var(--sp-2);
+}
+.in-flight.empty {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-2) var(--sp-4);
+  opacity: 0.72;
+}
+.in-flight-title {
+  font-family: var(--font-mono);
+  font-size: var(--size-label);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+.in-flight ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--sp-2);
+}
+.in-flight-row {
+  display: grid;
+  grid-template-columns: minmax(88px, auto) minmax(0, 1fr) minmax(80px, 160px) auto;
+  align-items: center;
+  gap: var(--sp-3);
+}
+.in-flight-label {
+  font-family: var(--font-mono);
+  font-size: var(--size-label);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--jewel-cyan);
+}
+/* Growing takes years rather than weeks; colouring it differently keeps a two-year wait from
+   reading as an emergency next to a clutch due on Thursday. */
+.in-flight-row.maturity .in-flight-label {
+  color: var(--jewel-emerald);
+}
+.in-flight-row.receptivity .in-flight-label {
+  color: var(--jewel-amethyst);
+}
+.in-flight-subject {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.in-flight-bar {
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: var(--surface-sunk);
+  overflow: hidden;
+}
+.in-flight-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--jewel-cyan);
+}
+.in-flight-when {
+  font-family: var(--font-mono);
+  font-size: var(--size-small);
+  white-space: nowrap;
+  text-align: right;
+}
+
+/* ==========================================================================
    MARKET
    ========================================================================== */
 .market {
@@ -864,6 +945,17 @@ select option {
   }
   .listing {
     grid-template-columns: minmax(0, 1fr);
+  }
+  /* The bar is the first thing to go: the band and the countdown are the information. */
+  .in-flight-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .in-flight-bar {
+    display: none;
+  }
+  .in-flight-when {
+    grid-column: 1 / -1;
+    text-align: left;
   }
 }
 
