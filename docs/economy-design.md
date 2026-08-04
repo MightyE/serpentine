@@ -99,7 +99,7 @@ becomes invisible and the best mechanic in the design stops teaching anything.
 Four terms, all of them real, all of them visible:
 
 ```
-price = base(rarity tier) × saturation(phenotype) × vigor × proof
+price = base(rarity tier) × saturation(phenotype) × vigor × proof × (1 + trait strength)
 ```
 
 - **Rarity tier** is Mendelian arithmetic, not a label someone assigned. A tier is *the pairing you
@@ -115,10 +115,28 @@ price = base(rarity tier) × saturation(phenotype) × vigor × proof
   narrow line is genuinely worth less than the same morph out of a diverse one, because a buyer of
   breeding stock cares. This is what gives fixation-versus-vigor an economic edge instead of leaving
   it as flavour.
-- **Proof** is the term worth dwelling on. A 66% possible het sells for about 66% of a proven het,
-  with a small extra haircut for the uncertainty itself. That is honest — it is what the buyer is
-  actually getting — and it makes the game's central reward *also* the thing that pays. Information
-  is the reward (principle 2), and information is what you sell.
+- **Proof** is the term worth dwelling on. It is what the player can actually back up about an
+  animal: `market.ts`'s `proofOf` scores each authored locus by the probability mass on its single
+  most likely genotype — 1 for a proven locus, 0.667 for the classic 66% possible het, 0 for a
+  locus nothing has ever said anything about — and prices the animal on the mean, mapped into
+  `[PROOF_PRICE_MULTIPLIER_MIN, 1]`. That is honest, it is what the buyer is actually getting, and
+  it makes the game's central reward *also* the thing that pays. Information is the reward
+  (principle 2), and information is what you sell.
+
+  **Locus for locus, not animal for animal.** An earlier draft of this section said a 66% possible
+  het sells for about 66% of a proven het. That holds for the locus and cannot hold for the animal:
+  proof across eleven loci has to be a mean, because the product — P(the whole card is right) —
+  multiplies out to roughly 0.01 for an ordinary wild-caught ball python, which would put every
+  animal in the game at the floor and make a gene test move nothing a player could see. So one
+  locus going from possible to proven is a nudge in the price, and proving an animal *out* is what
+  moves it a long way.
+
+- **Trait strength** is the fifth term, and a premium only. `traitStrengthOf` scores the
+  **heritable** part of a polygenic value — the baseline plus the animal's own allele
+  contributions, normalised against what those contributions can reach — so a high-white pied
+  commands up to `TRAIT_STRENGTH_PRICE_PREMIUM_MAX` more and an ordinary animal pays exactly base.
+  The non-heritable environment term is deliberately excluded: it does not breed on, and paying
+  for it would mean paying for weather.
 
 ### Where money comes from, and where it goes
 

@@ -57,7 +57,14 @@ import {
   type GateMode,
 } from './gates'
 import { isLoadLocus, makeLoadPool, playableSpecies } from './loadPool'
-import { estimateValue, sellSnake, unitsAbsorbed, type SaturationLedger } from './market'
+import {
+  estimateValue,
+  proofOf as proofFromKnowledge,
+  sellSnake,
+  traitStrengthOf,
+  unitsAbsorbed,
+  type SaturationLedger,
+} from './market'
 import { deserializeGame, serializeGame, storeFromSave, type SaveFile } from './save'
 import {
   canPlace,
@@ -81,6 +88,7 @@ import {
   GENE_TEST_COST,
   WEEKS_PER_YEAR,
   WEEKS_TO_MATURITY_FEMALE,
+  founderInbreedingFrom,
 } from './tuning'
 
 // ---------------------------------------------------------------------------
@@ -410,13 +418,32 @@ export class Session {
     return undefined
   }
 
+  /**
+   * What this animal would fetch today, given everything the player can currently prove about it.
+   *
+   * The `proof` term is why this cannot live in `market.ts`: belief is derived from the evidence
+   * the session holds, so the price of an animal genuinely changes when the player learns
+   * something about it without a single allele moving. That is the loop the whole game is built
+   * around, expressed as a number on a card.
+   *
+   * Belief is asked for over the **authored** loci only — that is what `knowledgeOf` returns —
+   * so the population's sixty untested load loci cannot drag every animal in the game to the
+   * uncertainty floor.
+   */
   valueOf(record: SnakeRecord): number {
     const phenotype = this.phenotype(record)
     const key = this.speciesOf(record).playable.phenotypeKey(phenotype)
     return estimateValue(phenotype, {
       unitsAlreadySold: unitsAbsorbed(this.saturation, key, this.turn),
       vigor: this.vigorOf(record),
+      proof: this.proofOf(record),
+      traitStrength: traitStrengthOf(record.individual, this.speciesOf(record).authored),
     })
+  }
+
+  /** 0..1: how much of what the card says about this animal is settled. See `market.ts`. */
+  proofOf(record: SnakeRecord): number {
+    return proofFromKnowledge(this.knowledgeOf(record))
   }
 
   /**
@@ -431,12 +458,30 @@ export class Session {
    * Viability rules come off with the other loci, because a rule cannot be evaluated against a
    * locus that is not in the narrowed definition. Nothing is lost: the animal is standing in front
    * of you, so it hatched.
+   *
+   * **Polygenic traits come off for the same reason, and leaving them on was a live crash.** A
+   * `PolygenicTrait` sums contributions from named loci; `evaluatePolygenic` skips a locus the
+   * genotype does not carry. The animal in the roster carries every locus, but the *candidate*
+   * genotypes `inferKnowledge` enumerates carry only the narrowed one — so a ball python holding
+   * `shimmer-plus` scored 25 points of iridescence its candidates could not, the observed
+   * phenotype key gained a `pattern:speckle` stage no candidate could produce, every candidate
+   * was assigned likelihood zero, and asking the genome card about that animal's albino locus
+   * threw *"no genotype can account for the evidence"*. Dropping the traits that reach outside
+   * the narrowed set puts both sides of the comparison back on the same footing, which is the
+   * only property that makes the comparison mean anything.
    */
   private narrowedTo(record: SnakeRecord, locusId: string): SpeciesDefinition<Phenotype> | undefined {
     const authored = this.speciesOf(record).authored
     const locus = authored.loci.find((l) => l.id === locusId)
     if (!locus) return undefined
-    return { ...authored, loci: [locus], viability: [] }
+    return {
+      ...authored,
+      loci: [locus],
+      viability: [],
+      polygenic: authored.polygenic.filter((trait) =>
+        trait.contributions.every((c) => c.locus === locusId),
+      ),
+    }
   }
 
   /**
@@ -446,16 +491,28 @@ export class Session {
    * one locus in it, so the key is recomputed here from the animal's own appearance under that
    * definition. Both sides of the comparison are then produced the same way, which is what makes
    * the inference honest — the question becomes "what does how it looks, at this locus, tell me".
+   *
+   * **A gene test on a different locus is dropped, and skipping that was a live crash.**
+   * `inferKnowledge` throws by design when a `geneTest` names a locus its species does not
+   * declare — a gene test for a gene that does not exist is a bug worth stopping for. But the
+   * narrowed species declares exactly one locus, so paying for a test on *albino* meant every
+   * other locus's card threw `"gene test names locus 'albino', which species 'ball-python' does
+   * not declare"` from then on. Gene-testing an animal broke the screen that shows you what the
+   * test bought. A test on another locus carries no information about this one, so dropping it
+   * loses nothing.
    */
   private evidenceUnder(id: IndividualId, species: SpeciesDefinition<Phenotype>): Evidence[] {
     const individual = this.lookup(id)
-    return (this.evidence[id] ?? []).map((item) => {
-      if (item.kind !== 'observedPhenotype' || !individual) return item
-      return {
-        kind: 'observedPhenotype',
-        phenotypeKey: species.phenotypeKey(geneticsEngine.express(individual, species)),
-      }
-    })
+    const declared = new Set(species.loci.map((l) => l.id))
+    return (this.evidence[id] ?? [])
+      .filter((item) => item.kind !== 'geneTest' || declared.has(item.locus))
+      .map((item) => {
+        if (item.kind !== 'observedPhenotype' || !individual) return item
+        return {
+          kind: 'observedPhenotype',
+          phenotypeKey: species.phenotypeKey(geneticsEngine.express(individual, species)),
+        }
+      })
   }
 
   /**
@@ -630,12 +687,44 @@ export class Session {
   // -- acting ----------------------------------------------------------------
 
   /**
-   * A new unrelated animal, drawn from the wild population.
+   * A new animal of unknown provenance.
    *
    * Its morph loci are drawn with a heavy thumb on wild-type, because a rehab that hands you a
    * rainbow on day one has spent the whole game's reward budget in its first minute. Its load
    * alleles come from `seedFounderLoad`, so it quietly carries three of the population's hidden
    * recessives like any real animal would.
+   *
+   * ## It arrives a mystery, and that is the point
+   *
+   * The only evidence recorded here is what a keeper with the animal in their hands could
+   * actually produce: **they looked at it, and they sexed it.** Everything the card goes on to
+   * say is `inferKnowledge` conditioning on those two facts. So a visible recessive comes back
+   * proven, a normal-looking animal comes back a coin-flip at every recessive locus, and nothing
+   * is ever asserted that a keeper could not have found out. There is no wild-caught knowledge
+   * object to keep in step with the inference engine, because there is no second code path.
+   *
+   * ## And it is not guaranteed outbred
+   *
+   * `inbreeding` comes from {@link founderInbreedingFrom}'s distribution rather than from a flat
+   * zero. `F = 0` is a claim about an animal's parents that nobody can make about an animal with
+   * no paperwork, and a world where the only inbreeding is inbreeding the player caused makes
+   * outcrossing to a purchase unconditionally free.
+   *
+   * **Stored, not synthesised.** The alternative was to invent a shallow pedigree at spawn so
+   * `F` fell out of `inbreedingCoefficient` the way it does for a hatchling. That is more honest
+   * in principle and it is what would make an inbred founder's `F` propagate to its descendants
+   * through Wright's `(1 + F_A)` term — but a two- or three-generation invented pedigree can only
+   * produce `F` at 0.25, 0.125, 0.0625…, which is a handful of spikes rather than the continuum
+   * the distribution describes, and it would put phantom animals the player never owned into the
+   * roster's lookup and its save file. So `F` is a stored property of the record, which
+   * `inbreedingOf` already prefers over the computed one, and a real pedigree supersedes it the
+   * moment the animal has descendants of its own.
+   *
+   * The known cost of that choice: `inbreedingCoefficient` walks pedigrees, so when this animal
+   * later turns up as a common ancestor its `(1 + F_A)` is read as `(1 + 0)`. Descendants of an
+   * inbred founder are therefore reported very slightly *less* inbred than they are. Closing
+   * that would mean teaching `pedigree.ts` about base-population inbreeding, which is a real
+   * change to the engine's model and not a side effect of a spawn function.
    */
   spawnRandom(speciesId?: string, name?: string): SnakeRecord {
     const index = this.state.flags.bump('snakesSpawned')
@@ -659,7 +748,9 @@ export class Session {
       const pick = rng.pick(pairs)
       overrides[locus.id] = [pick[0], pick[1]]
     }
-    const load = seedFounderLoad(loaded.pool, loaded.playable, id)
+    const inbreedingRng = rng.fork('inbreeding')
+    const inbreeding = founderInbreedingFrom(inbreedingRng.next(), inbreedingRng.next())
+    const load = seedFounderLoad(loaded.pool, loaded.playable, id, undefined, inbreeding)
 
     const individual: Individual = {
       id,
@@ -675,11 +766,12 @@ export class Session {
       name: name ?? `${phenotype.label} ${loaded.authored.label}`,
       acquiredTurn: this.turn,
       source: 'rescued',
-      inbreeding: 0,
+      inbreeding,
       expressedLoad: expressedLoad(individual, loaded.pool).map((e) => e.locus),
     }
     this.state.roster.add(record)
     this.noteEvidence(id, { kind: 'observedPhenotype', phenotypeKey: loaded.playable.phenotypeKey(phenotype) })
+    this.noteEvidence(id, { kind: 'observedSex', sex })
     this.state.bus.emit('snake.acquired', { individualId: id, source: 'rescued' })
     this.changed()
     return record
@@ -855,6 +947,7 @@ export class Session {
         kind: 'observedPhenotype',
         phenotypeKey: species.playable.phenotypeKey(phenotype),
       })
+      this.noteEvidence(record.individual.id, { kind: 'observedSex', sex: this.sexOf(finished) })
       this.gates.push(
         openGate('maturity', record.individual.id, maturityBand(this.sexOf(finished)), this.turn, this.gateMode),
       )
@@ -900,7 +993,12 @@ export class Session {
       this.state.bus,
       geneticsEngine,
       this.speciesOf(record).playable,
-      { ledger: this.saturation, turn: this.turn, vigor: this.vigorOf(record) },
+      {
+        ledger: this.saturation,
+        turn: this.turn,
+        vigor: this.vigorOf(record),
+        proof: this.proofOf(record),
+      },
     )
     // An animal that has left must not keep holding a slot nothing can free.
     this.store = withdraw(this.store, id)

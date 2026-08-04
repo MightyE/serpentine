@@ -732,6 +732,17 @@ export type Evidence =
   | { readonly kind: 'parentage'; readonly mother: IndividualId; readonly father: IndividualId }
   /** The animal was looked at. Rules out every genotype that would have looked different. */
   | { readonly kind: 'observedPhenotype'; readonly phenotypeKey: string }
+  /**
+   * The animal was sexed.
+   *
+   * A separate kind from `observedPhenotype` because sex is not part of a phenotype key — two
+   * animals of different sexes can look identical, and a species is free to leave sex out of its
+   * key entirely. Yet it is the single most reliably observed fact about an animal in hand, and
+   * without it every belief about a sex-linked locus stays smeared across the possibility that
+   * the animal is the other sex. That is the one place `unknown` was being reported about
+   * something a keeper can simply look at.
+   */
+  | { readonly kind: 'observedSex'; readonly sex: Sex }
   /** A test breeding. The heart of "proving it out". */
   | {
       readonly kind: 'offspring'

@@ -30,6 +30,7 @@
  * |---|---|
  * | `parentage` | the **prior** — the offspring distribution of the parents, from `punnett` |
  * | `observedPhenotype` | likelihood 0 for every genotype that would have looked different |
+ * | `observedSex` | likelihood 0 for every genotype of the other sex — which is what pins a sex-linked locus |
  * | `offspring` | P(the offspring you actually got \| this genotype × that mate) |
  * | `geneTest` | likelihood 0 for everything except the tested result — instant certainty |
  *
@@ -119,6 +120,12 @@ export function inferKnowledge<P extends object>(
       case 'observedPhenotype':
         rows = reweight(rows, (genotype) =>
           phenotypeKeyOf(individual, genotype, species) === item.phenotypeKey ? 1 : 0,
+        )
+        break
+
+      case 'observedSex':
+        rows = reweight(rows, (genotype) =>
+          sexOf(genotype, species.sexSystem) === item.sex ? 1 : 0,
         )
         break
 

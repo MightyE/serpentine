@@ -288,6 +288,48 @@ export const LOAD_ALLELE_FREQUENCY = 0.08
 export const LOAD_EXTRA_CARE_FRACTION = 0.5
 
 /**
+ * Wright's `F` for an animal that arrives with no pedigree, as a mixture of bands.
+ *
+ * **Why this is not zero.** `F = 0` is a claim, not a default: it says the animal's parents share
+ * no ancestor. Nobody knows that about a wild-caught animal or about one that turned up in a
+ * rescue with no paperwork. Handing every arrival a flat zero puts a number on the card that the
+ * game cannot support, and — worse for principle 3 — it means the only inbreeding in the world is
+ * inbreeding the player caused, so outcrossing to a purchase is unconditionally free.
+ *
+ * The shape is the honest one for animals of unknown provenance: most are ordinary outbred stock,
+ * a quarter carry the relatedness of a small or isolated population, and a tenth come out of a
+ * line somebody closed and never opened again. The top band reaches past `0.25` — a full-sib
+ * mating — because a line closed for several generations genuinely gets there, and an occasional
+ * animal a player can *see* is inbred is what makes the coefficient mean something before they
+ * have bred anything themselves.
+ *
+ * `[weight, minF, maxF]` per band; weights need not sum to 1, they are normalised.
+ */
+export const FOUNDER_INBREEDING_BANDS: readonly (readonly [number, number, number])[] = [
+  [0.65, 0.0, 0.02],
+  [0.25, 0.02, 0.1],
+  [0.1, 0.1, 0.3],
+]
+
+/**
+ * One draw from {@link FOUNDER_INBREEDING_BANDS}, given two uniforms in `[0, 1)`.
+ *
+ * Takes the uniforms rather than an `Rng` so that it stays a pure function of the constants above
+ * — the same reason every other derived model in this file does — and so a test can walk the
+ * distribution deterministically instead of sampling it.
+ */
+export function founderInbreedingFrom(bandRoll: number, withinBand: number): number {
+  const total = FOUNDER_INBREEDING_BANDS.reduce((sum, band) => sum + band[0], 0)
+  let remaining = Math.min(Math.max(bandRoll, 0), 1) * total
+  for (const [weight, min, max] of FOUNDER_INBREEDING_BANDS) {
+    remaining -= weight
+    if (remaining < 0) return min + (max - min) * Math.min(Math.max(withinBand, 0), 1)
+  }
+  const last = FOUNDER_INBREEDING_BANDS[FOUNDER_INBREEDING_BANDS.length - 1]!
+  return last[2]
+}
+
+/**
  * Hatch rate at F = 0.25 (a full-sib or parent-offspring pairing), as a fraction of the
  * outbred rate. `[min, max]`.
  *
@@ -417,6 +459,38 @@ export const VIGOR_PRICE_MULTIPLIER_MIN = 0.55
 export const VIGOR_PRICE_MULTIPLIER_MAX = 1.25
 
 /**
+ * Price multiplier for an animal nobody can say anything certain about, against 1.0 for one whose
+ * every locus is settled. `economy-design.md`'s fourth pricing term, made real.
+ *
+ * **This is the term that makes information the product.** Two animals with the same genotype and
+ * the same appearance are worth different money when one of them has been proven out and the
+ * other is a bag of maybes, because what a buyer of breeding stock is purchasing is the *claim*,
+ * and an unprovable claim is worth less than a provable one. It is also the only pricing term the
+ * player can move by spending time rather than by breeding something rarer, which is principle
+ * 2 with a price tag attached: the reward for learning something is that it becomes sellable.
+ *
+ * Deliberately shallower than the vigor band. Uncertainty is a discount, not a ruin — an
+ * unproven animal is still an animal, and a floor this side of half keeps a wild-caught arrival
+ * an attractive purchase rather than a trap.
+ */
+export const PROOF_PRICE_MULTIPLIER_MIN = 0.55
+
+/**
+ * The most a standout polygenic trait can add, as a fraction of the price.
+ *
+ * A **premium only**, never a penalty: an ordinary animal is scored at the bottom of this range
+ * and pays exactly what it paid before, so nothing in the world gets cheaper because this term
+ * was added. That asymmetry is deliberate — a high-white pied commands a real premium in the
+ * hobby, but a low-white one is not damaged goods, it is a normal pied.
+ *
+ * Small, and smaller than the vigor and proof bands on purpose. `market.ts` scores strength off
+ * the heritable part of a polygenic value only, so this is a real, breedable quality — but it is
+ * a quality of *degree* within a morph, and letting degree rival rarity would put the whole
+ * economy on a term the player improves by selecting rather than by learning anything.
+ */
+export const TRAIT_STRENGTH_PRICE_PREMIUM_MAX = 0.2
+
+/**
  * Hard ceiling the modelled economy must never cross, over `ECONOMY_SIM_WEEKS`.
  *
  * Not a wall in the game — nothing clamps your money. It's the assertion that no strategy the
@@ -509,13 +583,25 @@ export function hatchRateAtF(f: number): number {
 }
 
 /**
- * Sale price of one animal: base tier price, decayed by how many of that phenotype the market
- * has already absorbed, scaled by vigor, floored.
+ * Sale price of one animal — `economy-design.md`'s four terms, plus the trait-strength premium:
+ *
+ *     base(tier) × saturation × vigor × proof × (1 + trait strength premium)
  *
  * The saturation term is the shape of principle 5 — exponential decay in units sold, with a
  * floor so the market never reads as broken.
+ *
+ * `proof` and `traitStrength` both default to the neutral value, so a caller that has no belief
+ * to hand in gets exactly the price this function returned before they existed. That is what
+ * keeps the economy model in `tuning.test.ts` measuring the same thing it always measured: its
+ * animals are sold as visible morphs with no claim attached, which is the conservative case.
  */
-export function salePrice(tier: number, unitsAlreadySold: number, vigor: number): number {
+export function salePrice(
+  tier: number,
+  unitsAlreadySold: number,
+  vigor: number,
+  proof = 1,
+  traitStrength = 0,
+): number {
   const base = BASE_PRICE_BY_TIER[tier - 1] ?? 0
   const decay = Math.pow(0.5, unitsAlreadySold / SATURATION_HALFLIFE_SALES)
   const saturated = Math.max(decay, MARKET_PRICE_FLOOR_FRACTION)
@@ -523,7 +609,12 @@ export function salePrice(tier: number, unitsAlreadySold: number, vigor: number)
   const vigorMultiplier =
     VIGOR_PRICE_MULTIPLIER_MIN +
     (VIGOR_PRICE_MULTIPLIER_MAX - VIGOR_PRICE_MULTIPLIER_MIN) * clampedVigor
-  return base * saturated * vigorMultiplier
+  const clampedProof = Math.min(1, Math.max(0, proof))
+  const proofMultiplier =
+    PROOF_PRICE_MULTIPLIER_MIN + (1 - PROOF_PRICE_MULTIPLIER_MIN) * clampedProof
+  const strengthMultiplier =
+    1 + TRAIT_STRENGTH_PRICE_PREMIUM_MAX * Math.min(1, Math.max(0, traitStrength))
+  return base * saturated * vigorMultiplier * proofMultiplier * strengthMultiplier
 }
 
 // ===========================================================================

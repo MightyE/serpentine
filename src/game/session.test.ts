@@ -119,7 +119,12 @@ describe('session: the loop', () => {
     expect(preview.relatedness).toBeGreaterThan(0)
   })
 
-  it('sells a snake, and the second of the same morph fetches less', () => {
+  it('sells a snake, and the market pays less for the next of that morph', () => {
+    // Measured on **one** animal, before and after a sale of its morph, rather than by comparing
+    // two animals. Since pricing gained a proof term and a trait-strength premium, two animals
+    // that share a phenotype key are no longer interchangeable — the key records which render
+    // stages ran, not how strongly a polygenic trait came out, so one of them can genuinely be
+    // worth more than the other. Holding the animal fixed is what isolates saturation.
     const session = instantSession()
     for (let i = 0; i < 30; i++) session.spawnRandom('ball-python')
     const byKey = new Map<string, string[]>()
@@ -128,12 +133,14 @@ describe('session: the loop', () => {
       byKey.set(key, [...(byKey.get(key) ?? []), r.individual.id])
     }
     const pair = [...byKey.values()].find((ids) => ids.length >= 2)!
+    const held = session.residents().find((r) => r.individual.id === pair[1]!)!
 
+    const asking = session.valueOf(held)
     const first = session.sell(pair[0]!)
-    const second = session.sell(pair[1]!)
+    expect(session.valueOf(held)).toBeLessThan(asking)
 
+    const second = session.sell(pair[1]!)
     expect(first).toBeGreaterThan(0)
-    expect(second).toBeLessThan(first)
     expect(session.money).toBe(3000 + first + second)
   })
 

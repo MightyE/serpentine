@@ -311,3 +311,21 @@ there is no window a late hatch can push you past. The gates are still worth hav
 (a committed female is a real opportunity cost, and that alone is what makes a pairing a decision),
 but the variance does not earn its keep until the window does. Either implement the window or
 simplify `INCUBATION_WEEKS` to a single number; do not leave it in this state indefinitely.
+
+**2026-08-04 — Proof became a real pricing term, and arrivals stopped being outbred.** No existing
+constant moved. `salePrice` gained two multipliers: `PROOF_PRICE_MULTIPLIER_MIN` (an animal nobody
+can say anything certain about sells for 0.55 of a fully-proven one) and
+`TRAIT_STRENGTH_PRICE_PREMIUM_MAX` (up to +20% for the heritable part of a standout polygenic
+value). Both default to neutral, so the economy model's three-argument calls price exactly what
+they priced before and every charter invariant is still measuring the same function. This is
+principle 2 with a price tag on it: the reward for learning something is that it becomes sellable,
+and a gene test now shows up on the card as money. Spawned animals also arrive on a distribution of
+`F` (`FOUNDER_INBREEDING_BANDS`) rather than at a flat zero, which is what stops outcrossing to a
+purchase from being unconditionally free — principle 3.
+
+**2026-08-04 — Found while implementing it: `economy-design.md`'s "a 66% possible het sells for
+about 66% of a proven het" cannot hold animal-for-animal.** It was written against a one-locus
+animal. Proof over eleven loci has to be a mean (a product puts every animal in the game at the
+floor and makes a gene test invisible), so one locus moving from 0.667 to 1.0 is a nudge, not a
+two-thirds haircut. The doc's ratio survives exactly as a statement about the *locus*, which is
+what `proofOf` reports; the whole-animal price is the mean of those. Recorded rather than fudged.

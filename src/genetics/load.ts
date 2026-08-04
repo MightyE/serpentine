@@ -115,20 +115,34 @@ export const FOUNDER_LOAD_ALLELES = 3
  * Draw this founder's share of the population's genetic load, as genotype overrides ready to
  * hand to `makeGenotype()`.
  *
- * Every drawn locus comes back **heterozygous** — one load allele, one wild-type — because that
- * is what a founder is: a healthy-looking animal quietly carrying a few things. A founder is
- * never seeded homozygous.
+ * At `inbreeding = 0` every drawn locus comes back **heterozygous** — one load allele, one
+ * wild-type — because that is what an outbred founder is: a healthy-looking animal quietly
+ * carrying a few things.
+ *
+ * ## Why an unrelated-looking founder may still arrive homozygous
+ *
+ * `inbreeding` is Wright's `F` for an animal whose pedigree you do not have — a wild-caught
+ * animal out of a small population, or one from a line somebody closed and never opened again.
+ * `F` is *defined* as the probability that the animal's two alleles at a locus are identical by
+ * descent, so an animal at `F = 0.2` is homozygous by descent at about a fifth of its loci, and
+ * there is no reason the load loci would be spared. Seeding every founder heterozygous no matter
+ * what its `F` said would make the coefficient decorative on exactly the animals it describes.
+ *
+ * Only `'needsExtraCare'` entries are ever doubled here, and that is not a softening — it is
+ * conditioning on a fact you already have. The animal is standing in front of you, so whatever
+ * else is true of it, it is not homozygous for something that stops an egg developing.
  *
  * Randomness is derived from the founder's own id rather than taken as a parameter, following
  * the rule the engine states in `types.ts`: anything about an individual derives from that
- * individual's id. The same founder id always draws the same alleles, so a save file does not
- * have to store them and two callers cannot disagree about what a founder carries.
+ * individual's id. The same founder id and the same `F` always draw the same alleles, so a save
+ * file does not have to store them and two callers cannot disagree about what a founder carries.
  */
 export function seedFounderLoad<P extends object>(
   pool: GeneticLoadPool,
   species: SpeciesDefinition<P>,
   founderId: IndividualId,
   count: number = FOUNDER_LOAD_ALLELES,
+  inbreeding = 0,
 ): Readonly<Record<LocusId, AllelePair>> {
   if (!Number.isInteger(count) || count < 0) {
     throw new Error(`seedFounderLoad: count must be a non-negative whole number, got ${count}.`)
@@ -139,15 +153,28 @@ export function seedFounderLoad<P extends object>(
         `${pool.entries.length}. A founder cannot carry a deleterious recessive that does not exist.`,
     )
   }
+  if (!(inbreeding >= 0 && inbreeding <= 1)) {
+    throw new Error(
+      `seedFounderLoad: inbreeding must be a probability between 0 and 1, got ${inbreeding}. ` +
+        `It is Wright's F — the chance this animal's two alleles at a locus are identical by descent.`,
+    )
+  }
 
   const byId = new Map(species.loci.map((l) => [l.id, l]))
   const rng = makeRng(founderId).fork('genetic-load')
   const drawn = rng.shuffle(pool.entries).slice(0, count)
+  // A separate stream, so raising or lowering F changes which loci double up without also
+  // reshuffling *which* recessives the animal carries.
+  const doubling = makeRng(founderId).fork('genetic-load-homozygosity')
 
   const overrides: Record<LocusId, AllelePair> = {}
   for (const entry of drawn) {
     const locus = requireLoadLocus(byId, entry, pool.id)
-    overrides[entry.locus] = [entry.allele, locus.wildType]
+    const identicalByDescent = doubling.chance(inbreeding)
+    overrides[entry.locus] =
+      identicalByDescent && entry.outcome === 'needsExtraCare'
+        ? [entry.allele, entry.allele]
+        : [entry.allele, locus.wildType]
   }
   return overrides
 }
