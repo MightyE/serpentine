@@ -17,7 +17,7 @@
  * coordinate the pattern texture is indexed by. Shape and markings stay in step automatically.
  */
 
-import { angleOf, distance, perp, scale, add, sub, type Vec2 } from './geometry'
+import { angleOf, distance, dot, perp, scale, add, sub, type Vec2 } from './geometry'
 import { tangentAt } from './spine'
 import { widthAt } from './bodyShape'
 import type { ControlPoint } from './geometry'
@@ -40,7 +40,33 @@ export interface Ribbon {
   readonly length: number
 }
 
-/** Walk the spine and work out the two edges of the body. */
+/**
+ * Walk the spine and work out the two edges of the body.
+ *
+ * ## The edge points are shared, and that is what makes the segments rhomboids
+ *
+ * There is exactly one `left` and one `right` point per spine point, each offset half the body
+ * width along the *smoothed* normal at that point. The smoothing matters: `tangentAt` averages
+ * across both neighbours, so a spine that zigzags at the segment scale — which the slither wave
+ * does on a short-segmented, fat-bodied animal — produces a smooth pair of rails instead of a row
+ * of spikes.
+ *
+ * Because there is one point per spine point, segment `i` and segment `i + 1` already *share* the
+ * edge points at the joint between them. So the quad `left[i] → left[i+1] → right[i+1] → right[i]`
+ * is a rhomboid whose end edges are shared exactly with its neighbours, and consecutive rhomboids
+ * tile the body with no wedge between them and no overlap.
+ *
+ * Deliberately **not** mitred to `width / (2·cos(θ/2))` along the angle bisector. That is the
+ * textbook stroke join, and it does keep the body's nominal width through a turn — but it derives
+ * each edge point from the two raw segment directions rather than the smoothed tangent, so it
+ * reproduces every segment-scale kink in the animated spine as a spike. Measured on the render
+ * lab, the fat hognose fixtures (body width 3.8× the segment length) turned into sawblades. The
+ * gap this file exists to close comes from the edge points being *shared*, which they already are;
+ * the miter length only affects how faithfully the body holds its width, and it is not worth a
+ * visible sawtooth to buy it. `CLAUDE.md`'s known-limitations entry has the measurements, and
+ * `/miter-probe.html` is where the sawtooth shows up — but only in the render lab's *animated*
+ * modes, not on the probe's static coil, which is why the probe alone would not have caught it.
+ */
 export function buildRibbon(spine: readonly Vec2[], profile: readonly ControlPoint[]): Ribbon {
   const n = spine.length
   const arc: number[] = [0]
@@ -104,6 +130,33 @@ export function traceRibbon(ctx: CanvasRenderingContext2D, ribbon: Ribbon): void
  * This is the step that keeps the cost sane. The markings are computed **once** when the
  * phenotype is made, not per pixel per frame — the only per-frame work is moving the strips.
  *
+ * ## Why each strip is clipped to a rhomboid
+ *
+ * A strip is a rectangle, and rectangles cannot tile a curve. Where two of them met at an angle
+ * they overlapped on the inside of the bend and left a **wedge** uncovered on the outside of it,
+ * `(w/2)·tan(Δθ/2)` deep. That wedge showed the flat undercoat, and its total area is
+ * `≈ ½·(w/2)²·(total turn)` — independent of how many strips there are, so adding spine points
+ * never helped.
+ *
+ * It mattered far more than its size suggests, because a wedge is a slice *across* the body: it
+ * leaves a crosswise band merely ragged at one edge, but it cuts a *lengthwise* stripe into
+ * dashes with undercoat showing between them. On a dark substrate a dashed stripe reads as a
+ * see-through snake.
+ *
+ * The rectangle was never the shape available, though. {@link buildRibbon} keeps one edge point
+ * per spine point, so segment `i` and segment `i + 1` already share the two points at the joint
+ * between them: segment `i` owns the rhomboid `left[i] → left[i+1] → right[i+1] → right[i]`, and
+ * consecutive rhomboids share an edge *exactly*. So each strip is now **clipped to its own
+ * rhomboid** and drawn large enough to fill it. The rhomboids tile the body, so there is nothing
+ * left for a wedge to be, and no strip paints over its neighbour's territory either.
+ *
+ * The texture inside one strip is still mapped affinely — rotated to the segment and scaled — so
+ * a constant-`u` line in the texture stays square to its segment rather than following the shared
+ * edge, which is the residual shear noted in `CLAUDE.md`. What has gone is the missing area and
+ * the double-drawn overlap, not the per-facet approximation. Measured against a ground-truth
+ * `(u, v)` ramp, worst-case misregistration on a resting coil drops from 1.7 body-widths — a
+ * stripe landing on the wrong side of the animal — to under 0.6, and stops growing with curvature.
+ *
  * @param uOffset scrolls the texture along the body. Used by the animated-drift effect;
  *   leave at 0 and the markings stay put.
  */
@@ -115,7 +168,7 @@ export function paintRibbon(
   textureHeight: number,
   uOffset = 0,
 ): void {
-  const { spine, us, widths } = ribbon
+  const { spine, left, right, us } = ribbon
   const n = spine.length
 
   ctx.save()
@@ -127,20 +180,64 @@ export function paintRibbon(
     const p1 = spine[i + 1]
     const segLen = distance(p0, p1)
     if (segLen < 0.01) continue
-    // A hair of overlap, or antialiasing leaves hairline gaps between the strips.
-    const drawLen = segLen + 1
-    const w = Math.max(widths[i], widths[i + 1]) + 1.5
-    const angle = angleOf(sub(p1, p0))
+    // The segment's own direction, which is what the strip is rotated to — not `tangents`, which
+    // is smoothed across neighbours and so does not describe this segment's actual heading.
+    const dir = scale(sub(p1, p0), 1 / segLen)
+    const nrm = perp(dir)
+
+    // The rhomboid this segment owns, nudged a hair past the shared edges at both ends. Two
+    // abutting antialiased clip edges do not compose back to full coverage, so exact tiling would
+    // leave a faint seam; letting neighbours overlap by a fraction of a pixel does not, and the
+    // overlap is covered by texture that is correct to well under a pixel.
+    const bleed = scale(dir, EDGE_BLEED)
+    const corners = [sub(left[i], bleed), add(left[i + 1], bleed), add(right[i + 1], bleed), sub(right[i], bleed)]
+
+    // How big a rectangle has to be, in the segment's own frame, to cover that rhomboid.
+    let minX = 0
+    let maxX = segLen
+    let halfW = 0
+    for (const c of corners) {
+      const r = sub(c, p0)
+      const x = dot(r, dir)
+      minX = Math.min(minX, x)
+      maxX = Math.max(maxX, x)
+      halfW = Math.max(halfW, Math.abs(dot(r, nrm)))
+    }
+    minX -= 0.5
+    maxX += 0.5
+
+    // `u` runs linearly with distance along the segment, so extending the rectangle extends the
+    // `u` range by the same rule — the markings stay continuous instead of stretching.
+    const uPerPixel = (us[i + 1] - us[i]) / segLen
 
     ctx.save()
+    ctx.beginPath()
+    ctx.moveTo(corners[0].x, corners[0].y)
+    for (let c = 1; c < corners.length; c++) ctx.lineTo(corners[c].x, corners[c].y)
+    ctx.closePath()
+    ctx.clip()
+
     ctx.translate(p0.x, p0.y)
-    ctx.rotate(angle)
-    drawTextureColumn(ctx, texture, textureWidth, textureHeight, us[i] + uOffset, us[i + 1] + uOffset, drawLen, w)
+    ctx.rotate(angleOf(dir))
+    ctx.translate(minX, 0)
+    drawTextureColumn(
+      ctx,
+      texture,
+      textureWidth,
+      textureHeight,
+      us[i] + minX * uPerPixel + uOffset,
+      us[i] + maxX * uPerPixel + uOffset,
+      maxX - minX,
+      halfW * 2 + 1,
+    )
     ctx.restore()
   }
 
   ctx.restore()
 }
+
+/** How far each strip reaches past its shared edges, in logical pixels. See {@link paintRibbon}. */
+const EDGE_BLEED = 0.4
 
 /**
  * One strip, in the local frame where +x runs along the body and +y across it.

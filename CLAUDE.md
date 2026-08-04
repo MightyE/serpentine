@@ -148,10 +148,29 @@ ordinary `FlagSet` / `UnlockRegistry` seams; there is no dev build. See `src/gam
 - **Masking epistasis** is demonstrated only in a fictional trait (`cornSnake/fictional/umbra.ts`),
   never claimed for a real one — the research behind this project couldn't corroborate a real
   single-locus case from two independent sources.
-- **Renderer ribbon shear on hard curves**: `paintRibbon` maps texture strips affinely per spine
-  segment, so a sufficiently tight curve shears the markings slightly. Invisible at default
-  `turnRate`/`pointCount`; visible if either is pushed hard. Documented as a future project, not
-  fixed — see the project ladder.
+- **Renderer ribbon shear on hard curves**: `paintRibbon` maps each texture strip affinely — one
+  rotate-and-scale per spine segment — so a constant-`u` line in the texture stays square to its
+  own segment instead of following the shared edge at the joint. A tight curve therefore still
+  shears the markings slightly, and the fix for *that* (splitting each segment in two and shearing
+  each half to its own joint) is still a future project. See the project ladder.
+
+  What is fixed, and must not be re-broken: the strips used to be **rectangles**, which cannot tile
+  a curve — they left a wedge `(w/2)·tan(Δθ/2)` deep uncovered on the outside of every bend. Each
+  strip is now clipped to the **rhomboid** `left[i] → left[i+1] → right[i+1] → right[i]`, which
+  works because `buildRibbon` keeps one edge point per spine point, so consecutive segments already
+  share the two points at their joint and the rhomboids tile the body exactly. Measured on a
+  resting coil (`/miter-probe.html`), uncovered interior area went from 1.5–2.4% to 0.15%, and at
+  9x magnification 96–99% of what remains is the rounded snout bulge at spine point 0 rather than
+  any joint. Worst-case texture misregistration against a ground-truth `(u, v)` ramp went from 1.7
+  body-widths — a lengthwise stripe landing on the wrong side of the animal, which is what got
+  reported as "is he see-through?" — to under 0.6, and it no longer grows with curvature.
+
+  Do **not** "improve" this by mitring the edge points themselves to `width/(2·cos(θ/2))` along the
+  angle bisector. That is the textbook stroke join and it was tried and reverted: it derives each
+  edge point from the two raw segment directions instead of `tangentAt`'s smoothed tangent, so it
+  faithfully reproduces every segment-scale kink of the slither wave as a spike. The fat hognose
+  fixtures (body width 3.8× the segment length) rendered as sawblades. The gap was never caused by
+  the offset distance; it was caused by `paintRibbon` ignoring the shared points it already had.
 - **Genetic load is real, and `vigor` must stay a readout.** `genetics/pedigree.ts` and
   `genetics/load.ts` implement Wright's `F`, kinship and the deleterious-recessive pool; the game
   layer stores `F` and expressed load on a `SnakeRecord` at hatch. `load.ts`'s `vigor()` is display
