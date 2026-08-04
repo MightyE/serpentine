@@ -176,16 +176,29 @@ export class HabitatOccupant {
   /**
    * Draw the animal.
    *
-   * `selected` draws a cel-shaded border *on* the body, last, after every stage that could paint
-   * over it. Not a glow behind: a soft halo bleeds into the planting, changes weight with the
-   * animal's size, and disappears entirely against a pale sand biome. A flat keyline of constant
-   * width is the same mark on wet moss and on sand, at hatchling scale and at adult scale — which
-   * is what "this one is selected" has to mean on a floor of nine enclosures.
+   * One animal is drawn *completely* — its shadow, its selection mark, its body, its effects, its
+   * face — before the next one starts. Nothing here may be split into a per-floor pass: the moment
+   * one snake's overlay is drawn after another snake's body, it paints over an animal it does not
+   * belong to, and the result looks exactly like a translucent snake.
+   *
+   * `selected` is drawn *under* the body, not over it. See {@link drawSelectionUnderlay}.
+   *
+   * ## The order of the three under-layers is measured, not arbitrary
+   *
+   * Everything below the body has to happen in the order `glow → shadow → selection mark`, and
+   * each arrow is there because the other order was measured and failed:
+   *
+   * - **Glow before the shadow.** `effects.ts`'s halo draws with `globalCompositeOperation =
+   *   'lighter'`. Drawn *after* the contact shadow it brightens the exact ring the shadow just
+   *   darkened and erases it outright — measured at zero pixels darker than the substrate for a
+   *   glowing animal on a dark biome, i.e. the shadow was doing nothing at all.
+   * - **Shadow before the selection mark.** The mark is bright ink; a shadow pass over it mutes
+   *   the one thing that has to stay legible.
+   *
+   * All three still land before `paintBody`, so the body covers their inward halves exactly.
    */
   draw(ctx: CanvasRenderingContext2D, selected = false): void {
     const ribbon = buildRibbon(this.move.points, this.profile)
-
-    drawContactShadow(ctx, ribbon, this.widest)
 
     const effectCtx: EffectDrawContext = {
       ctx,
@@ -195,11 +208,13 @@ export class HabitatOccupant {
       seed: this.seedNumber,
     }
     for (const effect of this.effects) effect.drawBehind?.(effectCtx)
+    drawContactShadow(ctx, ribbon, this.widest)
+    if (selected) drawSelectionUnderlay(ctx, ribbon)
+
     paintBody(ctx, ribbon, this.phenotype, this.texture, this.drift * this.time)
     for (const effect of this.effects) effect.drawOver?.(effectCtx)
     drawLifeFace(ctx, ribbon, this.phenotype, { blink: this.blink, tongue: this.tongue }, this.age)
     drawUpturnedSnout(ctx, ribbon, this.phenotype)
-    if (selected) drawSelectionOutline(ctx, ribbon)
   }
 
   /** Is this point on the animal? Generous by a few pixels — these are small targets. */
@@ -268,61 +283,159 @@ export function occupantScale(enclosure: Bounds, phenotype: Phenotype): number {
   return (short * ADULT_LENGTH_OF_SHORT_SIDE) / bodyLength(phenotype.body, ADULT_SHAPE)
 }
 
-/** A soft dark shape under the body. Two pixels of offset is the whole of "it is on the ground". */
+/**
+ * `[down, across, reach, alpha]` per pass, offsets and reach as fractions of body width.
+ *
+ * The alphas are the tuned part, and they are a compromise rather than a maximum. A shadow can
+ * only darken, and darkening helps only while the surround stays clear of the animal's own rim:
+ * push it further and the surround comes down *through* a dark animal's rim luminance and the
+ * silhouette dissolves a second time, on the mid-tone biome instead of the dark one. Because the
+ * drop a wash produces scales with the surround's own brightness, the pale biomes constrain this
+ * from above and the dark ones from below.
+ *
+ * These two numbers are the pair that maximises the *worst* edge contrast across substrates, swept
+ * in `edge-contrast-probe.html`. The surface is genuinely opposed — at the extremes, no shadow at
+ * all scores 0.320 on cypress and 0.077 on cypress-dark, and a heavy one scores 0.039 and 0.334 —
+ * so this is a saddle, not a knob that wants turning up. Worst case here measures 0.205.
+ *
+ * Exported mutable so a probe page can sweep the alphas and re-measure without editing this file;
+ * nothing in the game writes to it.
+ */
+export const CONTACT_SHADOW_PASSES: [number, number, number, number][] = [
+  [0.34, 0.22, 0.1, 0.06],
+  [0.22, 0.15, 0, 0.3],
+]
+
+/**
+ * A dark shape under the body: offset, so the animal reads as resting *on* the substrate.
+ *
+ * ## Why one wash is not enough, measured
+ *
+ * This used to be a single `rgba(4, 2, 8, 0.3)` fill at one offset, which works on sand and does
+ * nothing on the biome that needs it most. The arithmetic is unforgiving: the darkest real
+ * substrate is cypress margin's `rgba(38, 34, 28)` at luminance 34, and 30% of the way from there
+ * toward near-black is luminance 25 — a drop of nine. Against that, a dark-based animal's own rim
+ * (`drawRoundness` shades it 22% toward `rgba(20, 14, 24)`) measured at luminance 59 beside a
+ * surround at 54: a Weber contrast of **0.083**, under the ~0.10 where a boundary stops being one.
+ * The animal did not look translucent because anything was translucent — the body is a provably
+ * opaque fill — it looked translucent because its edge and the ground it sat on were the same
+ * brightness, so there was no silhouette to see.
+ *
+ * So the shadow is what supplies the missing edge, and it needs two passes to do it:
+ *
+ * - a **skirt**, grown outward past the silhouette and faint, which is the only part visible on a
+ *   pale substrate and the part that separates the body from a dark one;
+ * - a **core**, tight and much darker, offset further, which is the actual contact.
+ *
+ * Growing a pass outward uses the same stroke-and-fill trick as {@link drawSelectionUnderlay}:
+ * stroking the traced outline at `2 × reach` and filling it under the nonzero rule widens the
+ * silhouette by `reach` without a second path and without `shadowBlur`, which would be
+ * re-rasterised for every animal on every frame.
+ *
+ * Offsets and reach are fractions of the body's own width, so a hatchling gets a hatchling's
+ * shadow. The alphas are not: they are contrast, and contrast does not scale with size — see
+ * {@link CONTACT_SHADOW_PASSES}.
+ */
 function drawContactShadow(
   ctx: CanvasRenderingContext2D,
   ribbon: ReturnType<typeof buildRibbon>,
   widest: number,
 ): void {
   ctx.save()
-  ctx.translate(widest * 0.16, widest * 0.24)
-  ctx.fillStyle = 'rgba(4, 2, 8, 0.3)'
-  traceRibbon(ctx, ribbon)
-  ctx.fill()
-  ctx.restore()
-}
-
-/**
- * The selection glow: the body's own line, stroked twice, wide and soft then narrow and bright.
- *
- * Two strokes rather than a `shadowBlur`, because canvas shadows are re-rasterised on every fill
- * and this one would be paid on every frame of every selected animal.
- */
-function drawHalo(ctx: CanvasRenderingContext2D, spine: readonly Vec2[], widest: number): void {
-  ctx.save()
-  ctx.lineCap = 'round'
   ctx.lineJoin = 'round'
-  ctx.beginPath()
-  ctx.moveTo(spine[0].x, spine[0].y)
-  for (let i = 1; i < spine.length; i++) ctx.lineTo(spine[i].x, spine[i].y)
-
-  ctx.globalAlpha = 0.28
-  ctx.lineWidth = widest * 2.1
-  ctx.strokeStyle = selectionColour()
-  ctx.stroke()
-
-  ctx.globalAlpha = 0.65
-  ctx.lineWidth = widest * 1.35
-  ctx.stroke()
+  ctx.lineCap = 'round'
+  for (const [down, across, reach, alpha] of CONTACT_SHADOW_PASSES) {
+    const colour = `rgba(4, 2, 8, ${alpha})`
+    ctx.save()
+    ctx.translate(widest * across, widest * down)
+    traceRibbon(ctx, ribbon)
+    ctx.fillStyle = colour
+    if (reach > 0) {
+      ctx.strokeStyle = colour
+      ctx.lineWidth = widest * reach * 2
+      ctx.stroke()
+    }
+    ctx.fill()
+    ctx.restore()
+  }
   ctx.restore()
 }
 
 /**
- * The highlight colour, read off the stylesheet rather than written here.
+ * The selection mark: the body's own silhouette, worn outward, and painted *underneath*.
+ *
+ * The renderer has already computed where the edge of this animal is — `traceRibbon` lays down
+ * exactly the outline `paintBody` fills — so the border is that same path, not an approximation
+ * of it. Two bands: a bright ink hugging the body and a dark keyline outside it, the way a
+ * cel-shaded sticker carries a black edge. The ink is what keeps the mark legible on a pale sand
+ * biome, the keyline is what keeps it legible on wet moss. Between them there is no biome this
+ * fails on, and no `shadowBlur` re-rasterised on every frame of every selected animal.
+ *
+ * ## Why under the body, and why fill as well as stroke
+ *
+ * A coiled snake's outline is one *self-intersecting* path, and the parts of it that run over the
+ * animal's own back are interior lines, not silhouette. Any attempt to keep the mark outward-only
+ * by clipping fails on exactly those parts: under `evenodd` a doubly-covered coil counts as
+ * outside the body, so the keyline is let through and draws straight across the animal — which is
+ * what a selected coiled adult used to look like.
+ *
+ * Painting the mark first and the body over it needs no clip at all. Stroke at **double** width
+ * and fill the same path with the default nonzero rule: the fill is the union of every coil, so
+ * self-overlaps merge instead of cancelling, and every inward half and every interior crossing
+ * line lands inside that union. `paintBody` then covers the union exactly — it fills the same path
+ * with the same rule — leaving only the outward half on screen. Full girth, pattern untouched.
+ *
+ * Both widths are constants in CSS pixels, not multiples of the body. The canvas transform is
+ * `setTransform(dpr, …)` and nothing else (`floor.ts`), so a constant here is a constant on the
+ * screen: the same crisp mark around a hatchling and around its mother, at `dpr` 1 and 2 alike.
+ */
+/** How far the mark reaches outward from the edge, in CSS pixels: the bright band, then the dark. */
+const SELECT_INK_WIDTH = 1.1
+const SELECT_KEYLINE_WIDTH = 2.1
+
+function drawSelectionUnderlay(
+  ctx: CanvasRenderingContext2D,
+  ribbon: ReturnType<typeof buildRibbon>,
+): void {
+  ctx.save()
+  ctx.lineJoin = 'round'
+  ctx.lineCap = 'round'
+  ctx.globalAlpha = 1
+
+  for (const [token, fallback, reach] of [
+    ['--select-keyline', 'rgba(6, 4, 10, 0.78)', SELECT_KEYLINE_WIDTH],
+    ['--select-ink', '#2fd2ff', SELECT_INK_WIDTH],
+  ] as const) {
+    const colour = themeColour(token, fallback)
+    traceRibbon(ctx, ribbon)
+    ctx.lineWidth = reach * 2
+    ctx.strokeStyle = colour
+    ctx.stroke()
+    // The fill is not decoration: without it the stroke's inner edge and the body's outer edge
+    // are two independently antialiased boundaries, and a hairline of biome shows between them.
+    ctx.fillStyle = colour
+    ctx.fill()
+  }
+  ctx.restore()
+}
+
+/**
+ * A theme colour, read off the stylesheet rather than written here.
  *
  * `theme.css` owns every colour in this app and a canvas cannot use a custom property directly,
- * so it is resolved once and cached. Outside a browser — a test, a screenshot harness — it falls
- * back to the token's own literal value.
+ * so each one is resolved once and cached. Outside a browser — a test, a screenshot harness — it
+ * falls back to the token's own literal value.
  */
-let cachedSelection: string | null = null
-function selectionColour(): string {
-  if (cachedSelection) return cachedSelection
-  // The literal behind `--accent` → `--jewel-amethyst` in `theme.css`, for headless contexts only.
-  const fallback = '#b14dff'
+const cachedColours = new Map<string, string>()
+function themeColour(token: string, fallback: string): string {
+  const cached = cachedColours.get(token)
+  if (cached) return cached
   if (typeof document === 'undefined') return fallback
-  const value = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()
-  cachedSelection = value || fallback
-  return cachedSelection
+  const value = getComputedStyle(document.documentElement).getPropertyValue(token).trim()
+  // An unresolved `var(…)` means the stylesheet has not landed yet; don't cache a broken colour.
+  const resolved = value && !value.startsWith('var(') ? value : fallback
+  cachedColours.set(token, resolved)
+  return resolved
 }
 
 function distanceToSegment(x: number, y: number, a: Vec2, b: Vec2): number {
