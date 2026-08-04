@@ -31,6 +31,7 @@ import type { EyeAppearance, Phenotype } from '../contract'
 import { lighten, mix, rgba, toCss } from '../colour'
 import { perp, scale, add, type Vec2 } from '../geometry'
 import { pointOnBody, type Ribbon } from '../ribbon'
+import { clampDilation, dilationPupilBonus, dilationRadiusScale } from '../head'
 import { eyePlacementAtAge, eyeScaleAtAge, ratioMaturity } from './stage'
 
 /** Animation state the face needs. Same shape as `head.ts`'s `FaceState`, on purpose. */
@@ -39,6 +40,12 @@ export interface LifeFaceState {
   readonly blink: number
   /** 0 = tongue hidden, 1 = fully extended. */
   readonly tongue: number
+  /**
+   * Surprise, 0–1. Optional, defaults to the resting face, and multiplies the age-derived eye
+   * size rather than replacing it — the same additive contract `head.ts`'s `FaceState.dilation`
+   * documents, and deliberately the same numbers, imported from there.
+   */
+  readonly dilation?: number
 }
 
 /**
@@ -54,9 +61,10 @@ export function drawLifeFace(
   age: number,
 ): void {
   const place = eyePlacementAtAge(age)
+  const dilation = clampDilation(state.dilation)
   if (state.tongue > 0.001) drawTongue(ctx, ribbon, phenotype, state.tongue, place.u, age)
-  drawEye(ctx, ribbon, phenotype.eye, place.u, place.v, state.blink, age)
-  drawEye(ctx, ribbon, phenotype.eye, place.u, -place.v, state.blink, age)
+  drawEye(ctx, ribbon, phenotype.eye, place.u, place.v, state.blink, age, dilation)
+  drawEye(ctx, ribbon, phenotype.eye, place.u, -place.v, state.blink, age, dilation)
 }
 
 /** Body width where the eyes are — very nearly the widest part of the head. */
@@ -74,11 +82,13 @@ function drawEye(
   v: number,
   blink: number,
   age: number,
+  dilation: number,
 ): void {
   const centre = pointOnBody(ribbon, eyeU, v * 0.72)
   // 0.23 is `head.ts`'s adult constant, and `eyeScaleAtAge` is 1 at age 1 — so an adult drawn
   // through this file and an adult drawn through `head.ts` come out the same size.
-  const radius = headWidth(ribbon, eyeU) * 0.23 * eye.sizeScale * eyeScaleAtAge(age)
+  const radius =
+    headWidth(ribbon, eyeU) * 0.23 * eye.sizeScale * eyeScaleAtAge(age) * dilationRadiusScale(dilation)
   if (radius < 0.4) return
 
   // The eye squashes vertically as it closes, in the head's own frame — so a blink still looks
@@ -104,7 +114,7 @@ function drawEye(
 
   // Round, not slit — and *bigger* on a baby, in proportion to the iris. A pupil that stays a
   // fixed fraction while the eye grows reads as staring; one that grows with it reads as young.
-  const pupil = 0.52 + 0.12 * (1 - ratioMaturity(age))
+  const pupil = 0.52 + 0.12 * (1 - ratioMaturity(age)) + dilationPupilBonus(dilation)
   ctx.fillStyle = toCss(eye.pupilColour)
   ctx.beginPath()
   ctx.arc(0, 0, radius * pupil, 0, Math.PI * 2)

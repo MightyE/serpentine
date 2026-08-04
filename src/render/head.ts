@@ -35,12 +35,32 @@ const EYE_U = 0.062
 /** How far out toward the side of the head. Snake eyes really are set high and wide. */
 const EYE_V = 0.46
 
+/**
+ * How much bigger a fully dilated eye is drawn. 0.34 is enough to read as a reaction at the size
+ * an animal is drawn in an enclosure, and small enough that the eye still sits on the head rather
+ * than swallowing it.
+ */
+const DILATION_GAIN = 0.34
+/** How much of the extra size the pupil takes, on top of the whole eye growing. */
+const DILATION_PUPIL_GAIN = 0.16
+
 /** Animation state the face needs, computed by {@link SnakeView} and handed in. */
 export interface FaceState {
   /** 0 = wide open, 1 = fully shut. */
   readonly blink: number
   /** 0 = tongue hidden, 1 = fully extended. */
   readonly tongue: number
+  /**
+   * Surprise. 0 is the resting face and is what every caller gets by omitting it; 1 is fully
+   * dilated — the eye grows and the pupil grows faster still.
+   *
+   * Additive on purpose. This is a transient *expression*, not a property of the animal: it rides
+   * on top of `EyeAppearance.sizeScale` and `eyeScaleAtAge` rather than replacing either, so a
+   * hatchling being picked up is a startled hatchling and not briefly an adult.
+   *
+   * See `pose/held.ts`'s `pickupDilation` for the curve callers drive this with.
+   */
+  readonly dilation?: number
 }
 
 /**
@@ -54,9 +74,26 @@ export function drawFace(
   phenotype: Phenotype,
   state: FaceState,
 ): void {
+  const dilation = clampDilation(state.dilation)
   if (state.tongue > 0.001) drawTongue(ctx, ribbon, phenotype, state.tongue)
-  drawEye(ctx, ribbon, phenotype.eye, EYE_V, state.blink)
-  drawEye(ctx, ribbon, phenotype.eye, -EYE_V, state.blink)
+  drawEye(ctx, ribbon, phenotype.eye, EYE_V, state.blink, dilation)
+  drawEye(ctx, ribbon, phenotype.eye, -EYE_V, state.blink, dilation)
+}
+
+/** Shared by both face renderers, so "what does dilation 0.5 mean" has one answer. */
+export function clampDilation(dilation: number | undefined): number {
+  if (dilation === undefined || !Number.isFinite(dilation)) return 0
+  return Math.max(0, Math.min(1, dilation))
+}
+
+/** The multiplier a given dilation puts on the eye's radius. */
+export function dilationRadiusScale(dilation: number): number {
+  return 1 + DILATION_GAIN * dilation
+}
+
+/** The extra the pupil takes, as an addition to its fraction of the iris. */
+export function dilationPupilBonus(dilation: number): number {
+  return DILATION_PUPIL_GAIN * dilation
 }
 
 function headWidth(ribbon: Ribbon): number {
@@ -72,12 +109,13 @@ function drawEye(
   eye: EyeAppearance,
   v: number,
   blink: number,
+  dilation: number,
 ): void {
   const centre = pointOnBody(ribbon, EYE_U, v * 0.72)
   // Sized so a default `sizeScale` eye just about fills the side of the head and bulges very
   // slightly past the outline — which is both what a real snake's eye does and what reads as
   // "big eyes". Push `sizeScale` higher for hatchlings.
-  const radius = headWidth(ribbon) * 0.23 * eye.sizeScale
+  const radius = headWidth(ribbon) * 0.23 * eye.sizeScale * dilationRadiusScale(dilation)
   if (radius < 0.4) return
 
   // The eye squashes vertically as it closes, in the head's own frame — so a blink still looks
@@ -102,10 +140,11 @@ function drawEye(
   ctx.arc(0, 0, radius, 0, Math.PI * 2)
   ctx.fill()
 
-  // Round, not slit. See the note at the top of the file.
+  // Round, not slit. See the note at the top of the file. A startled eye is a bigger eye with a
+  // proportionally bigger pupil in it — the pupil alone would read as a mood, not as surprise.
   ctx.fillStyle = toCss(eye.pupilColour)
   ctx.beginPath()
-  ctx.arc(0, 0, radius * 0.52, 0, Math.PI * 2)
+  ctx.arc(0, 0, radius * (0.52 + dilationPupilBonus(dilation)), 0, Math.PI * 2)
   ctx.fill()
 
   if (eye.highlight) {
