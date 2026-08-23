@@ -2,7 +2,7 @@ import type { Locus, TraitProjection } from '../../../genetics/types'
 import type { Phenotype } from '../../../render/contract'
 import type { RealVsModeledNote } from '../../support/traitNotes'
 import { key } from '../../support/genotypeKey'
-import { withLabel } from '../../support/phenotypeKey'
+import { withMorph } from '../../support/phenotypeKey'
 import { rgb } from '../phenotype'
 
 /**
@@ -52,7 +52,7 @@ export const coralGlowProjection: TraitProjection<Phenotype> = {
   apply: (draft, value) => {
     if (value !== true) return
     Object.assign(draft, {
-      label: withLabel(draft.label, 'Coral Glow'),
+      ...withMorph(draft, 'colour', 'Coral Glow'),
       baseColour: rgb(235, 200, 120),
       patternColour: rgb(210, 160, 90),
     })

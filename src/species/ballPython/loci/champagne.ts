@@ -2,7 +2,7 @@ import type { Locus, TraitProjection, ViabilityRule } from '../../../genetics/ty
 import type { Phenotype } from '../../../render/contract'
 import type { RealVsModeledNote } from '../../support/traitNotes'
 import { key } from '../../support/genotypeKey'
-import { withLabel } from '../../support/phenotypeKey'
+import { withMorph } from '../../support/phenotypeKey'
 import { rgb } from '../phenotype'
 
 /**
@@ -59,7 +59,7 @@ export const champagneProjection: TraitProjection<Phenotype> = {
   apply: (draft, value) => {
     if (value === 'champagne') {
       Object.assign(draft, {
-        label: withLabel(draft.label, 'Champagne'),
+        ...withMorph(draft, 'colour', 'Champagne'),
         baseColour: rgb(200, 175, 130),
         patternColour: rgb(120, 100, 70),
         effects: [...draft.effects, 'needsExtraCare'],
@@ -67,7 +67,7 @@ export const champagneProjection: TraitProjection<Phenotype> = {
     } else if (value === 'superChampagne') {
       // Unreachable in a hatched animal; kept honest for the Punnett-square preview.
       Object.assign(draft, {
-        label: withLabel(draft.label, 'Super Champagne'),
+        ...withMorph(draft, 'colour', 'Super Champagne'),
         baseColour: rgb(235, 225, 200),
         patternColour: rgb(200, 190, 165),
       })

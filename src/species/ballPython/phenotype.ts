@@ -16,6 +16,9 @@ export function ballPythonBasePhenotype(): Phenotype {
   return {
     seed: 'unseeded',
     label: 'Normal',
+    // Wild type on both axes. Traits advance these as they apply — see `support/phenotypeKey.ts`.
+    colourMorph: 'Normal',
+    patternMorph: 'Normal',
     baseColour: rgb(101, 74, 47),
     patternColour: rgb(43, 33, 22),
     bellyColour: rgb(232, 220, 196),

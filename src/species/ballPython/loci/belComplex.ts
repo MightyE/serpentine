@@ -2,7 +2,7 @@ import type { Locus, TraitProjection } from '../../../genetics/types'
 import type { Phenotype } from '../../../render/contract'
 import type { RealVsModeledNote } from '../../support/traitNotes'
 import { key } from '../../support/genotypeKey'
-import { withLabel } from '../../support/phenotypeKey'
+import { withMorph } from '../../support/phenotypeKey'
 import { rgb } from '../phenotype'
 
 /**
@@ -52,14 +52,14 @@ export const belProjection: TraitProjection<Phenotype> = {
   apply: (draft, value) => {
     if (value === 'bel') {
       Object.assign(draft, {
-        label: withLabel(draft.label, 'Blue-Eyed Leucistic'),
+        ...withMorph(draft, 'colour', 'Blue-Eyed Leucistic'),
         baseColour: rgb(245, 242, 236),
         patternColour: rgb(245, 242, 236),
         eye: { ...draft.eye, irisColour: rgb(90, 150, 210), pupilColour: rgb(40, 70, 110) },
       })
     } else if (typeof value === 'string' && value.startsWith('het')) {
       Object.assign(draft, {
-        label: withLabel(draft.label, value.replace('het', 'het ')),
+        ...withMorph(draft, 'colour', value.replace('het', 'het ')),
         baseColour: rgb(150, 128, 90),
         effects: [...draft.effects, 'spiderWebHeadMarks'],
       })

@@ -2,7 +2,7 @@ import type { Locus, TraitProjection } from '../../../genetics/types'
 import type { Phenotype } from '../../../render/contract'
 import type { RealVsModeledNote } from '../../support/traitNotes'
 import { key } from '../../support/genotypeKey'
-import { withLabel } from '../../support/phenotypeKey'
+import { withMorph } from '../../support/phenotypeKey'
 import { rgb } from '../phenotype'
 
 /** Amelanistic: **simple recessive**, removes black pigment only. Pairs with anerythristic. */
@@ -31,7 +31,7 @@ export const amelanisticProjection: TraitProjection<Phenotype> = {
   apply: (draft, value) => {
     if (value !== true) return
     Object.assign(draft, {
-      label: withLabel(draft.label, 'Amelanistic'),
+      ...withMorph(draft, 'colour', 'Amelanistic'),
       baseColour: rgb(255, 150, 60),
       patternColour: rgb(230, 90, 20),
     })

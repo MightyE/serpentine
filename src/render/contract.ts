@@ -250,6 +250,27 @@ export interface Phenotype {
   /** Player-facing name for this look, e.g. what you would put on a listing. */
   readonly label: string
 
+  /**
+   * The morph name split along the two axes a keeper actually shops and breeds on.
+   *
+   * {@link label} is the whole name — "Lavender Superconda" — and stays the thing you put on a
+   * listing. These two are that name taken apart, because the axes are independent in a way the
+   * combined string hides: lavender is a recessive that changes only pigment, anaconda an
+   * incomplete dominant that changes only markings, and a keeper pairing for one of them needs to
+   * see at a glance what the other side of the animal is. A single string cannot answer "what
+   * pattern is that snake" without the reader knowing which words are pattern words.
+   *
+   * `'Normal'` on an axis means wild-type *for that axis*, not for the animal — a Superconda's
+   * `colourMorph` is `'Normal'` and it is still very much not a normal snake.
+   *
+   * Which axis a trait lands on is a statement about what it does to the animal, not about how it
+   * is implemented: ball python albino recolours by adding a `modifier` render stage, and it is a
+   * colour morph. See `species/support/phenotypeKey.ts`'s `withMorph`.
+   */
+  readonly colourMorph: string
+  /** The markings side of the morph name. See {@link colourMorph}. */
+  readonly patternMorph: string
+
   /** Dominant colour of the animal. Usually what the `base` stage paints. */
   readonly baseColour: Rgba
   /** The markings colour — what patterns draw in. */

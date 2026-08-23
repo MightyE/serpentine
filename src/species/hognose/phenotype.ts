@@ -40,6 +40,9 @@ export function hognoseBasePhenotype(): Phenotype {
   return {
     seed: 'unseeded',
     label: 'Normal',
+    // Wild type on both axes. Traits advance these as they apply — see `support/phenotypeKey.ts`.
+    colourMorph: 'Normal',
+    patternMorph: 'Normal',
     baseColour: rgb(176, 146, 96),
     patternColour: rgb(92, 62, 40),
     bellyColour: rgb(238, 222, 182),

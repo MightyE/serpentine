@@ -2,7 +2,7 @@ import type { Locus, TraitProjection } from '../../../genetics/types'
 import type { Phenotype } from '../../../render/contract'
 import type { RealVsModeledNote } from '../../support/traitNotes'
 import { key } from '../../support/genotypeKey'
-import { withLabel } from '../../support/phenotypeKey'
+import { withMorph } from '../../support/phenotypeKey'
 import { rgb } from '../phenotype'
 
 /**
@@ -36,7 +36,7 @@ export const hognoseSableProjection: TraitProjection<Phenotype> = {
   apply: (draft, value) => {
     if (value !== true) return
     Object.assign(draft, {
-      label: withLabel(draft.label, 'Sable'),
+      ...withMorph(draft, 'colour', 'Sable'),
       // The settled dark-adult colour — see the note below for the darkens-with-age behaviour
       // this game does not attempt.
       baseColour: rgb(70, 54, 46),

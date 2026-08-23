@@ -716,6 +716,19 @@ select option {
   color: var(--jewel-cyan);
 }
 
+/* The two morph axes, side by side under the full name. Wraps rather than truncating: a
+   "Blue-Eyed Leucistic" on one axis is a legitimately long name and must stay readable. */
+.morph-axes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-4);
+}
+.morph-axes .muted {
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+  margin-right: var(--sp-1);
+}
+
 .stat-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));

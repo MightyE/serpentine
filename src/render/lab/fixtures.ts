@@ -41,6 +41,8 @@ export const FIXTURES: readonly Phenotype[] = [
   {
     seed: 'fixture-corn-normal',
     label: 'Corn — wild type',
+    colourMorph: 'Normal',
+    patternMorph: 'Normal',
     baseColour: rgba(206, 122, 68),
     patternColour: rgba(140, 44, 38),
     bellyColour: rgba(240, 228, 205),
@@ -61,6 +63,8 @@ export const FIXTURES: readonly Phenotype[] = [
   {
     seed: 'fixture-corn-amel',
     label: 'Corn — amelanistic',
+    colourMorph: 'Amelanistic',
+    patternMorph: 'Normal',
     baseColour: rgba(206, 122, 68),
     patternColour: rgba(140, 44, 38),
     bellyColour: rgba(240, 228, 205),
@@ -83,6 +87,8 @@ export const FIXTURES: readonly Phenotype[] = [
   {
     seed: 'fixture-corn-ghost',
     label: 'Corn — ghost (low contrast)',
+    colourMorph: 'Ghost',
+    patternMorph: 'Normal',
     baseColour: rgba(150, 128, 112),
     patternColour: rgba(92, 74, 70),
     bellyColour: rgba(232, 226, 214),
@@ -100,6 +106,8 @@ export const FIXTURES: readonly Phenotype[] = [
   {
     seed: 'fixture-ball-normal',
     label: 'Ball python — wild type',
+    colourMorph: 'Normal',
+    patternMorph: 'Normal',
     baseColour: rgba(196, 168, 92),
     patternColour: rgba(58, 44, 36),
     bellyColour: rgba(244, 240, 228),
@@ -120,6 +128,8 @@ export const FIXTURES: readonly Phenotype[] = [
   {
     seed: 'fixture-ball-pied',
     label: 'Ball python — piebald',
+    colourMorph: 'Normal',
+    patternMorph: 'Piebald',
     baseColour: rgba(186, 156, 88),
     patternColour: rgba(52, 40, 32),
     bellyColour: rgba(246, 242, 232),
@@ -138,6 +148,8 @@ export const FIXTURES: readonly Phenotype[] = [
   {
     seed: 'fixture-ball-clown',
     label: 'Ball python — reduced pattern',
+    colourMorph: 'Normal',
+    patternMorph: 'Reduced',
     baseColour: rgba(200, 158, 96),
     patternColour: rgba(64, 46, 40),
     bellyColour: rgba(248, 244, 232),
@@ -155,6 +167,8 @@ export const FIXTURES: readonly Phenotype[] = [
   {
     seed: 'fixture-garter-striped',
     label: 'Garter — striped',
+    colourMorph: 'Normal',
+    patternMorph: 'Striped',
     baseColour: rgba(58, 84, 66),
     patternColour: rgba(238, 224, 138),
     bellyColour: rgba(224, 232, 214),
@@ -172,6 +186,8 @@ export const FIXTURES: readonly Phenotype[] = [
   {
     seed: 'fixture-hatchling',
     label: 'Hatchling (big head, small body)',
+    colourMorph: 'Normal',
+    patternMorph: 'Normal',
     baseColour: rgba(122, 152, 118),
     patternColour: rgba(52, 74, 58),
     bellyColour: rgba(238, 240, 226),
@@ -189,6 +205,8 @@ export const FIXTURES: readonly Phenotype[] = [
   {
     seed: 'fixture-fictional-starlight',
     label: 'Starlight (invented)',
+    colourMorph: 'Starlight',
+    patternMorph: 'Normal',
     baseColour: rgba(38, 34, 66),
     patternColour: rgba(168, 190, 255),
     bellyColour: rgba(74, 70, 110),
@@ -205,6 +223,8 @@ export const FIXTURES: readonly Phenotype[] = [
   {
     seed: 'fixture-fictional-aurora',
     label: 'Aurora (invented)',
+    colourMorph: 'Aurora',
+    patternMorph: 'Normal',
     baseColour: rgba(46, 96, 108),
     patternColour: rgba(150, 245, 210),
     bellyColour: rgba(210, 246, 240),
@@ -221,6 +241,8 @@ export const FIXTURES: readonly Phenotype[] = [
   {
     seed: 'fixture-combo-albino-pied',
     label: 'Combo — albino + piebald',
+    colourMorph: 'Albino',
+    patternMorph: 'Piebald',
     baseColour: rgba(126, 96, 44),
     patternColour: rgba(56, 42, 34),
     bellyColour: rgba(248, 244, 234),
@@ -240,6 +262,8 @@ export const FIXTURES: readonly Phenotype[] = [
   {
     seed: 'fixture-combo-ghost-clown',
     label: 'Combo — ghost + reduced',
+    colourMorph: 'Ghost',
+    patternMorph: 'Reduced',
     baseColour: rgba(126, 138, 120),
     patternColour: rgba(64, 62, 58),
     bellyColour: rgba(232, 230, 220),
@@ -258,6 +282,8 @@ export const FIXTURES: readonly Phenotype[] = [
   {
     seed: 'fixture-hognose-normal',
     label: 'Hognose — wild type',
+    colourMorph: 'Normal',
+    patternMorph: 'Normal',
     baseColour: rgba(176, 146, 96),
     patternColour: rgba(92, 62, 40),
     bellyColour: rgba(238, 222, 182),
@@ -280,6 +306,8 @@ export const FIXTURES: readonly Phenotype[] = [
   {
     seed: 'fixture-hognose-albino',
     label: 'Hognose — albino',
+    colourMorph: 'Albino',
+    patternMorph: 'Normal',
     baseColour: rgba(252, 176, 96),
     patternColour: rgba(226, 122, 48),
     bellyColour: rgba(238, 222, 182),
@@ -302,6 +330,8 @@ export const FIXTURES: readonly Phenotype[] = [
   {
     seed: 'fixture-hognose-superconda',
     label: 'Hognose — superconda',
+    colourMorph: 'Normal',
+    patternMorph: 'Superconda',
     baseColour: rgba(176, 146, 96),
     patternColour: rgba(92, 62, 40),
     bellyColour: rgba(238, 222, 182),
@@ -329,6 +359,8 @@ export const FIXTURES: readonly Phenotype[] = [
   {
     seed: 'fixture-hognose-superarctic',
     label: 'Hognose — superarctic',
+    colourMorph: 'Superarctic',
+    patternMorph: 'Normal',
     baseColour: rgba(232, 226, 220),
     patternColour: rgba(38, 32, 30),
     bellyColour: rgba(238, 222, 182),

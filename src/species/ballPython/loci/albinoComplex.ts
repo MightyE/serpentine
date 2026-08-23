@@ -2,7 +2,7 @@ import type { Locus, TraitProjection } from '../../../genetics/types'
 import type { Phenotype } from '../../../render/contract'
 import type { RealVsModeledNote } from '../../support/traitNotes'
 import { key } from '../../support/genotypeKey'
-import { withLabel } from '../../support/phenotypeKey'
+import { withMorph } from '../../support/phenotypeKey'
 import { rgb } from '../phenotype'
 
 /**
@@ -65,7 +65,7 @@ export const albinoProjection: TraitProjection<Phenotype> = {
   apply: (draft, value) => {
     if (value === 'albino') {
       Object.assign(draft, {
-        label: withLabel(draft.label, 'Albino'),
+        ...withMorph(draft, 'colour', 'Albino'),
         baseColour: rgb(250, 232, 168),
         patternColour: rgb(255, 205, 120),
         eye: { ...draft.eye, irisColour: rgb(230, 60, 60), pupilColour: rgb(200, 30, 30) },
@@ -73,7 +73,7 @@ export const albinoProjection: TraitProjection<Phenotype> = {
       })
     } else if (value === 'candy') {
       Object.assign(draft, {
-        label: withLabel(draft.label, 'Candy'),
+        ...withMorph(draft, 'colour', 'Candy'),
         baseColour: rgb(255, 200, 210),
         patternColour: rgb(255, 170, 190),
         eye: { ...draft.eye, irisColour: rgb(220, 90, 120), pupilColour: rgb(180, 40, 60) },
@@ -83,7 +83,7 @@ export const albinoProjection: TraitProjection<Phenotype> = {
       // Real: two different TYR-pathway mutations, compound het. Neither parent's colour —
       // a paler, warmer intermediate that is its own named look.
       Object.assign(draft, {
-        label: withLabel(draft.label, 'Ultramel'),
+        ...withMorph(draft, 'colour', 'Ultramel'),
         baseColour: rgb(252, 218, 190),
         patternColour: rgb(255, 190, 160),
         eye: { ...draft.eye, irisColour: rgb(225, 110, 90), pupilColour: rgb(190, 70, 55) },

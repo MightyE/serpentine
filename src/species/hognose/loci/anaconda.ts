@@ -2,7 +2,7 @@ import type { Locus, TraitProjection } from '../../../genetics/types'
 import type { Phenotype } from '../../../render/contract'
 import type { RealVsModeledNote } from '../../support/traitNotes'
 import { key } from '../../support/genotypeKey'
-import { withLabel } from '../../support/phenotypeKey'
+import { withMorph } from '../../support/phenotypeKey'
 
 /**
  * Anaconda: the textbook **incomplete dominant** on this species. One copy ("Anaconda") merges
@@ -41,7 +41,7 @@ export const hognoseAnacondaProjection: TraitProjection<Phenotype> = {
   apply: (draft, value) => {
     if (value === 'anaconda') {
       Object.assign(draft, {
-        label: withLabel(draft.label, 'Anaconda'),
+        ...withMorph(draft, 'pattern', 'Anaconda'),
         stages: draft.stages.map((stage) =>
           stage.kind === 'pattern' && stage.name === 'blotches'
             ? { ...stage, params: { ...stage.params, scaleU: 6, threshold: 0.42, softness: 0.14 } }
@@ -50,7 +50,7 @@ export const hognoseAnacondaProjection: TraitProjection<Phenotype> = {
       })
     } else if (value === 'superconda') {
       Object.assign(draft, {
-        label: withLabel(draft.label, 'Superconda'),
+        ...withMorph(draft, 'pattern', 'Superconda'),
         // Almost patternless: pull the blotches back to a thin dorsal stripe rather than
         // removing the pattern stage outright, so a keepDorsal strip survives — the real
         // animal's one remaining marking.

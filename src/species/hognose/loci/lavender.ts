@@ -2,7 +2,7 @@ import type { Locus, TraitProjection } from '../../../genetics/types'
 import type { Phenotype } from '../../../render/contract'
 import type { RealVsModeledNote } from '../../support/traitNotes'
 import { key } from '../../support/genotypeKey'
-import { withLabel } from '../../support/phenotypeKey'
+import { withMorph } from '../../support/phenotypeKey'
 import { rgb } from '../phenotype'
 
 /**
@@ -42,7 +42,7 @@ export const hognoseLavenderProjection: TraitProjection<Phenotype> = {
   apply: (draft, value) => {
     if (value !== true) return
     Object.assign(draft, {
-      label: withLabel(draft.label, 'Lavender'),
+      ...withMorph(draft, 'colour', 'Lavender'),
       // The settled adult colour — see the note below for the hatchling-red-fading-out behaviour
       // this game does not attempt.
       baseColour: rgb(196, 170, 188),

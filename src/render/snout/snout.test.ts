@@ -36,6 +36,8 @@ function fixturePhenotype(extra: Phenotype['extra'] = {}): Phenotype {
   return {
     seed: 'test-hognose',
     label: 'Test',
+    colourMorph: 'Normal',
+    patternMorph: 'Normal',
     baseColour: rgba(180, 150, 100),
     patternColour: rgba(90, 60, 40),
     bellyColour: rgba(230, 220, 200),

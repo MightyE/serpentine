@@ -2,7 +2,7 @@ import type { Locus, ModifierRule, TraitProjection } from '../../../genetics/typ
 import type { Phenotype } from '../../../render/contract'
 import type { RealVsModeledNote } from '../../support/traitNotes'
 import { key } from '../../support/genotypeKey'
-import { withLabel } from '../../support/phenotypeKey'
+import { withMorph } from '../../support/phenotypeKey'
 import { rgb } from '../phenotype'
 
 /**
@@ -35,7 +35,7 @@ export const anerythristicProjection: TraitProjection<Phenotype> = {
   apply: (draft, value) => {
     if (value !== true) return
     Object.assign(draft, {
-      label: withLabel(draft.label, 'Anerythristic'),
+      ...withMorph(draft, 'colour', 'Anerythristic'),
       baseColour: rgb(190, 190, 190),
       patternColour: rgb(60, 60, 60),
     })

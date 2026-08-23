@@ -9,11 +9,10 @@
  * this animal's whole visual identity. See `phenotype.ts` for the body numbers and
  * `../../render/snout/index.ts` for the snout render module.
  *
- * **Not registered in `src/species/index.ts` (`allSpecies`).** That file is outside this
- * dispatch's owned paths this cycle — see the hognose execution deposit
- * (`~/.team-brain/projects/snake-genetics-game/cycles/2026-07-31_1618_design-scaffold/execution/engineer-hognose.md`)
- * for the exact two-line wiring another agent needs to make hognose breedable in the actual game
- * rather than just visible in the render lab.
+ * Registered in `src/species/index.ts` (`allSpecies`), so `Session.spawnRandom` draws hognose
+ * founders alongside ball pythons and corn snakes and they breed like any other species. This
+ * comment used to say the opposite — it was written while the wiring was owned by another
+ * dispatch, and outlived that.
  */
 import type { SpeciesDefinition } from '../../genetics/types'
 import type { Phenotype } from '../../render/contract'

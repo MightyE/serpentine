@@ -12,6 +12,9 @@ export function cornSnakeBasePhenotype(): Phenotype {
   return {
     seed: 'unseeded',
     label: 'Normal',
+    // Wild type on both axes. Traits advance these as they apply — see `support/phenotypeKey.ts`.
+    colourMorph: 'Normal',
+    patternMorph: 'Normal',
     baseColour: rgb(214, 96, 42),
     patternColour: rgb(150, 40, 20),
     bellyColour: rgb(245, 235, 210),

@@ -2,7 +2,7 @@ import type { Locus, TraitProjection } from '../../../genetics/types'
 import type { Phenotype } from '../../../render/contract'
 import type { RealVsModeledNote } from '../../support/traitNotes'
 import { key } from '../../support/genotypeKey'
-import { withLabel } from '../../support/phenotypeKey'
+import { withMorph } from '../../support/phenotypeKey'
 import { rgb } from '../phenotype'
 
 /**
@@ -38,12 +38,12 @@ export const hognoseArcticProjection: TraitProjection<Phenotype> = {
   apply: (draft, value) => {
     if (value === 'arctic') {
       Object.assign(draft, {
-        label: withLabel(draft.label, 'Arctic'),
+        ...withMorph(draft, 'colour', 'Arctic'),
         patternColour: rgb(48, 38, 34),
       })
     } else if (value === 'superarctic') {
       Object.assign(draft, {
-        label: withLabel(draft.label, 'Superarctic'),
+        ...withMorph(draft, 'colour', 'Superarctic'),
         // Melanin concentrates into the blotches while the background washes out toward white —
         // the opposite move from anaconda's pattern reduction, so the two stay visually distinct
         // if a save file ever lets a player compare them side by side.

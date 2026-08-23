@@ -2,7 +2,7 @@ import type { Locus, TraitProjection } from '../../../genetics/types'
 import type { Phenotype } from '../../../render/contract'
 import type { RealVsModeledNote } from '../../support/traitNotes'
 import { key } from '../../support/genotypeKey'
-import { withLabel } from '../../support/phenotypeKey'
+import { withMorph } from '../../support/phenotypeKey'
 import { rgb } from '../phenotype'
 
 /**
@@ -36,13 +36,13 @@ export const pastelProjection: TraitProjection<Phenotype> = {
   apply: (draft, value) => {
     if (value === 'pastel') {
       Object.assign(draft, {
-        label: withLabel(draft.label, 'Pastel'),
+        ...withMorph(draft, 'colour', 'Pastel'),
         baseColour: rgb(150, 118, 60),
         patternColour: rgb(60, 46, 28),
       })
     } else if (value === 'superPastel') {
       Object.assign(draft, {
-        label: withLabel(draft.label, 'Super Pastel'),
+        ...withMorph(draft, 'colour', 'Super Pastel'),
         baseColour: rgb(215, 190, 120),
         patternColour: rgb(110, 90, 55),
         body: { ...draft.body, headScale: draft.body.headScale * 1.05 },

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bodyLength, widthProfile } from '../render/bodyShape'
+import { bodyLength, peakWidthOf, widthProfile } from '../render/bodyShape'
 import { hognose, hognoseRealTraitNotes } from './hognose'
 import { cornSnake } from './cornSnake'
 import { ballPython } from './ballPython'
@@ -29,16 +29,16 @@ describe('hognose: body reads as short and stout next to a corn snake', () => {
   it('is thicker relative to its own length than the corn snake is', () => {
     const hognoseProfile = widthProfile(hognose.basePhenotype().body)
     const cornProfile = widthProfile(cornSnake.basePhenotype().body)
-    const hognosePeakRatio = hognoseProfile[4].value / bodyLength(hognose.basePhenotype().body)
-    const cornPeakRatio = cornProfile[4].value / bodyLength(cornSnake.basePhenotype().body)
+    const hognosePeakRatio = peakWidthOf(hognoseProfile) / bodyLength(hognose.basePhenotype().body)
+    const cornPeakRatio = peakWidthOf(cornProfile) / bodyLength(cornSnake.basePhenotype().body)
     expect(hognosePeakRatio).toBeGreaterThan(cornPeakRatio)
   })
 
   it('is at least as thick relative to its length as the (already stout) ball python', () => {
     const hognoseProfile = widthProfile(hognose.basePhenotype().body)
     const ballProfile = widthProfile(ballPython.basePhenotype().body)
-    const hognosePeakRatio = hognoseProfile[4].value / bodyLength(hognose.basePhenotype().body)
-    const ballPeakRatio = ballProfile[4].value / bodyLength(ballPython.basePhenotype().body)
+    const hognosePeakRatio = peakWidthOf(hognoseProfile) / bodyLength(hognose.basePhenotype().body)
+    const ballPeakRatio = peakWidthOf(ballProfile) / bodyLength(ballPython.basePhenotype().body)
     expect(hognosePeakRatio).toBeGreaterThanOrEqual(ballPeakRatio)
   })
 

@@ -2,7 +2,7 @@ import type { Locus, TraitProjection } from '../../../genetics/types'
 import type { Phenotype } from '../../../render/contract'
 import type { RealVsModeledNote } from '../../support/traitNotes'
 import { key } from '../../support/genotypeKey'
-import { withLabel } from '../../support/phenotypeKey'
+import { withMorph } from '../../support/phenotypeKey'
 import { rgb } from '../phenotype'
 
 /**
@@ -49,7 +49,7 @@ export const hognoseAlbinoProjection: TraitProjection<Phenotype> = {
   apply: (draft, value) => {
     if (value !== true) return
     Object.assign(draft, {
-      label: withLabel(draft.label, 'Albino'),
+      ...withMorph(draft, 'colour', 'Albino'),
       baseColour: rgb(252, 176, 96),
       patternColour: rgb(226, 122, 48),
       eye: { ...draft.eye, irisColour: rgb(224, 64, 64), pupilColour: rgb(196, 32, 32) },

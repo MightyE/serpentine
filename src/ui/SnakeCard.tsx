@@ -129,6 +129,17 @@ export function SnakeCard({ session, record, onClose, onSell }: SnakeCardProps) 
             />
           </div>
           <p className="morph">{phenotype.label}</p>
+          {/* The morph name taken apart. A keeper pairing for pattern needs to read the colour
+              side at a glance and vice versa, and the combined name above cannot answer that
+              without the reader already knowing which words are pattern words. */}
+          <p className="morph-axes mono small">
+            <span>
+              <span className="muted">colour</span> {phenotype.colourMorph}
+            </span>
+            <span>
+              <span className="muted">pattern</span> {phenotype.patternMorph}
+            </span>
+          </p>
           <p className="muted small mono">
             {species.authored.label} · {sex} · {age >= 1 ? 'grown' : age > 0.55 ? 'juvenile' : 'hatchling'}
           </p>

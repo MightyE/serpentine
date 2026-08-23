@@ -35,6 +35,8 @@ import type { Phenotype } from './contract'
 const SUBJECT: Phenotype = {
   seed: 'portrait-subject',
   label: 'Test snake',
+  colourMorph: 'Normal',
+  patternMorph: 'Normal',
   baseColour: rgba(206, 122, 68),
   patternColour: rgba(140, 44, 38),
   bellyColour: rgba(240, 228, 205),

@@ -2,7 +2,7 @@ import type { Locus, TraitProjection } from '../../../genetics/types'
 import type { Phenotype } from '../../../render/contract'
 import type { RealVsModeledNote } from '../../support/traitNotes'
 import { key } from '../../support/genotypeKey'
-import { withLabel } from '../../support/phenotypeKey'
+import { withMorph } from '../../support/phenotypeKey'
 import { rgb } from '../phenotype'
 
 /**
@@ -44,7 +44,7 @@ export const hognoseToffeebellyProjection: TraitProjection<Phenotype> = {
   apply: (draft, value) => {
     if (value !== true) return
     Object.assign(draft, {
-      label: withLabel(draft.label, 'Toffeebelly'),
+      ...withMorph(draft, 'colour', 'Toffeebelly'),
       baseColour: rgb(214, 172, 116),
       patternColour: rgb(158, 108, 62),
       bellyColour: rgb(198, 140, 84),

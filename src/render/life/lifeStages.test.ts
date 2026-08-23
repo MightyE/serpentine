@@ -32,6 +32,8 @@ import { resamplePath, sCurvePose } from './view'
 const SUBJECT: Phenotype = {
   seed: 'test-individual-7',
   label: 'Test corn',
+  colourMorph: 'Normal',
+  patternMorph: 'Normal',
   baseColour: rgba(206, 122, 68),
   patternColour: rgba(140, 44, 38),
   bellyColour: rgba(240, 228, 205),
