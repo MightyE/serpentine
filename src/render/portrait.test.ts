@@ -15,7 +15,11 @@
  * 1. The spine's arc length is the animal's own body length — no compression along the body.
  * 2. The body's drawn *shape* is identical in every box, whatever that box's aspect ratio.
  *    This is the regression. A per-axis scale fails it immediately.
- * 3. It lands centred, and inside the box.
+ * 3. It lands centred, and inside the box — measured on **everything drawn**, not just the body.
+ *    That distinction is its own regression: portraits gained a flicked tongue, which reaches
+ *    about 1.3 head-widths past the snout, while the fit was still computed from the body rails
+ *    alone. There was room for the body, so nothing failed and nothing threw — the fork was
+ *    simply drawn off the edge of the canvas, and the snake appeared to be biting the frame.
  *
  * Runs under vitest's `node` environment, so nothing here may touch `document` — which is why it
  * tests the layout rather than calling `renderPortrait`, whose whole job is to make a canvas.
@@ -25,7 +29,7 @@ import { describe, expect, it } from 'vitest'
 import { bodyLength, widthProfile } from './bodyShape'
 import { rgba } from './colour'
 import { distance } from './geometry'
-import { outlineBounds, portraitLayout } from './portrait'
+import { outlineBounds, paintedBounds, portraitLayout } from './portrait'
 import type { Phenotype } from './contract'
 
 const SUBJECT: Phenotype = {
@@ -97,10 +101,10 @@ describe('portrait layout', () => {
     }
   })
 
-  it('centres the body in the box and keeps it inside', () => {
+  it('centres everything it draws in the box and keeps it inside', () => {
     for (const [name, w, h] of BOXES) {
       const { ribbon, zoom, x, y } = portraitLayout(SUBJECT, w, h)
-      const b = outlineBounds(ribbon)
+      const b = paintedBounds(ribbon)
       const left = x + b.x * zoom
       const top = y + b.y * zoom
       const right = left + b.width * zoom
@@ -112,6 +116,20 @@ describe('portrait layout', () => {
       expect(top, `${name} top edge`).toBeGreaterThan(0)
       expect(right, `${name} right edge`).toBeLessThan(w)
       expect(bottom, `${name} bottom edge`).toBeLessThan(h)
+    }
+  })
+
+  it('leaves room for the tongue, which reaches past the body', () => {
+    for (const [name, w, h] of BOXES) {
+      const { ribbon } = portraitLayout(SUBJECT, w, h)
+      const body = outlineBounds(ribbon)
+      const painted = paintedBounds(ribbon)
+
+      // The whole point: the two are *not* the same box. If a later change makes the tongue fit
+      // inside the body's own bounds, this assertion is what says so out loud rather than
+      // leaving a fit that only works by accident.
+      expect(painted.width, `${name} painted width`).toBeGreaterThan(body.width)
+      expect(painted.x, `${name} painted left`).toBeLessThanOrEqual(body.x)
     }
   })
 

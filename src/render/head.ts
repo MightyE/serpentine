@@ -164,13 +164,17 @@ function drawEye(
 }
 
 /**
- * The forked tongue, flicking out from the tip of the snout.
+ * Where the tongue is, at a given extension.
  *
- * Drawn as three short lines: a stem and two tips that spread as it extends. The spread is what
- * sells it — a fork that is already open when it appears looks like a drawing, whereas one that
- * opens as it comes out looks like something the animal is doing.
+ * Split out from the drawing because the tongue is the one thing on a snake that sticks out well
+ * beyond the body outline, so anything sizing a frame around the animal has to know how far —
+ * `portrait.ts` fits its art window to this. Two places deriving those points separately is two
+ * places to keep in step, and the failure mode is silent: the frame is fitted to the body, the
+ * tongue is drawn past its edge, and the fork is quietly cropped off.
+ *
+ * Returned nose-outward: `[start, knee, tipA, tipB]`.
  */
-function drawTongue(ctx: CanvasRenderingContext2D, ribbon: Ribbon, phenotype: Phenotype, extend: number): void {
+export function tongueOutline(ribbon: Ribbon, extend: number): Vec2[] {
   const snout = ribbon.spine[0]
   const dir = ribbon.tangents[0]
   const side = perp(dir)
@@ -184,6 +188,19 @@ function drawTongue(ctx: CanvasRenderingContext2D, ribbon: Ribbon, phenotype: Ph
   const knee: Vec2 = add(start, scale(dir, stemLen))
   const tipA: Vec2 = add(add(knee, scale(dir, forkLen)), scale(side, spread))
   const tipB: Vec2 = add(add(knee, scale(dir, forkLen)), scale(side, -spread))
+  return [start, knee, tipA, tipB]
+}
+
+/**
+ * The forked tongue, flicking out from the tip of the snout.
+ *
+ * Drawn as three short lines: a stem and two tips that spread as it extends. The spread is what
+ * sells it — a fork that is already open when it appears looks like a drawing, whereas one that
+ * opens as it comes out looks like something the animal is doing.
+ */
+function drawTongue(ctx: CanvasRenderingContext2D, ribbon: Ribbon, phenotype: Phenotype, extend: number): void {
+  const [start, knee, tipA, tipB] = tongueOutline(ribbon, extend)
+  const w = headWidth(ribbon)
 
   ctx.save()
   ctx.strokeStyle = toCss(lighten(mix(phenotype.patternColour, rgba(220, 60, 90, 1), 0.75), 0.05))
