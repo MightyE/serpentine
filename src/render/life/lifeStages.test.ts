@@ -20,7 +20,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { ADULT_SHAPE, bodyLength, widthProfile } from '../bodyShape'
+import { ADULT_SHAPE, bodyLength, headWidthOf, peakWidthOf, widthProfile } from '../bodyShape'
 import { rgba } from '../colour'
 import { phenotypeKey } from '../texture'
 import type { Phenotype } from '../contract'
@@ -55,11 +55,12 @@ function shapeRatios(age: number): {
   const shape = lifeShapeAtAge(age)
   const profile = widthProfile(SUBJECT.body, shape)
   const len = bodyLength(SUBJECT.body, shape)
-  // Index 2 is the cheek — the widest point of the head. Index 4 is the mid-body peak. Taking a
-  // `max` over the whole profile would silently return whichever of the two is larger, which is
-  // precisely the quantity under test.
-  const head = profile[2].value
-  const peak = profile[4].value
+  // Split at the pinch rather than taking a `max` over the whole profile: on a hatchling the head
+  // is wider than the belly, so one `max` would return whichever is larger — precisely the
+  // quantity under test. Read by landmark rather than by index, because the head gained control
+  // points and `profile[2]` would now be the back of the skull.
+  const head = headWidthOf(profile, shape)
+  const peak = peakWidthOf(profile, shape)
   return {
     headOverLength: head / len,
     peakOverLength: peak / len,

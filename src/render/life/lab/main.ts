@@ -13,7 +13,7 @@
  * check. `head ÷ length` is: if it does not move as you drag, something has regressed to scaling.
  */
 
-import { bodyLength, widthProfile } from '../../bodyShape'
+import { bodyLength, headWidthOf, peakWidthOf, widthProfile } from '../../bodyShape'
 import { fitCanvasToDisplay, startRenderLoop } from '../../loop'
 import { clearTextureCache, patternTextureFor } from '../../texture'
 import { clearPortraitCache } from '../../portrait'
@@ -364,8 +364,8 @@ function updateReadout(age: number): void {
   const shape = lifeShapeAtAge(age)
   const profile = widthProfile(subject.body, shape)
   const length = bodyLength(subject.body, shape)
-  const head = profile[2].value
-  const peak = profile[4].value
+  const head = headWidthOf(profile, shape)
+  const peak = peakWidthOf(profile, shape)
 
   readout.innerHTML =
     `<span><b>age</b> ${age.toFixed(2)} (${stageAtAge(age)})</span>` +
@@ -381,7 +381,7 @@ function describeAge(age: number): string {
   const shape = lifeShapeAtAge(age)
   const profile = widthProfile(subject.body, shape)
   const length = bodyLength(subject.body, shape)
-  return `${length.toFixed(0)}px · head ${((profile[2].value / length) * 100).toFixed(1)}% of length`
+  return `${length.toFixed(0)}px · head ${((headWidthOf(profile, shape) / length) * 100).toFixed(1)}% of length`
 }
 
 // --- tiny DOM helpers ---------------------------------------------------------------------------

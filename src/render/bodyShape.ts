@@ -80,7 +80,7 @@ export const ADULT_SHAPE: LifeShape = {
   girthMul: 1,
   headMul: 1,
   headSpan: 0.13,
-  neckPinch: 0.62,
+  neckPinch: 0.55,
   snoutBlunt: 0.34,
   taperBias: 0,
 }
@@ -105,6 +105,12 @@ export function widthProfile(body: BodyProportions, life: LifeShape = ADULT_SHAP
   // The head is *narrower* than the mid-body on most snakes — the widest part of a snake is its
   // stomach, not its skull. Drawing them equal is what makes a snake look like a tadpole.
   // Young animals push this ratio up toward 1, which is exactly the cue we want.
+  //
+  // This has no headroom left, and it is worth knowing why before reaching for it. `headScale`
+  // runs to 1.2 on a real species, so 0.82 already puts an adult ball python's skull at 0.98 of
+  // its own belly. Raising it to make a head *read* more clearly is the obvious move and the
+  // wrong one — it tips those species past their bellies and they go tadpole. A head reads as a
+  // head because of the neck behind it, not because of its width: see the profile rows below.
   const head = peak * 0.82 * body.headScale * life.headMul
   const neck = peak * life.neckPinch
 
@@ -119,9 +125,17 @@ export function widthProfile(body: BodyProportions, life: LifeShape = ADULT_SHAP
 
   return [
     { u: 0.0, value: head * life.snoutBlunt }, // snout tip — rounded off by the head cap
-    { u: 0.025 * span, value: head * 0.78 },
-    { u: 0.065 * span, value: head }, // widest across the cheeks, just behind the eyes
+    { u: 0.022 * span, value: head * 0.8 },
+    { u: 0.062 * span, value: head }, // widest across the cheeks, just behind the eyes
+    // The back of the skull, still nearly full width. This row is what makes the head read as a
+    // *shape* rather than a bump: without it the profile turns around the instant it reaches the
+    // cheek and the head is a single point on a smooth ramp, which the eye files as "the thin end
+    // of the body" rather than as a head.
+    { u: 0.098 * span, value: head * 0.93 },
     { u: life.headSpan, value: neck }, // the pinch. Do not delete this row.
+    // The neck holds slim for a moment before the body swells. A pinch that starts climbing again
+    // immediately is a dip in a ramp; one that stays down is a neck.
+    { u: 0.22, value: neck * 1.1 },
     { u: 0.4, value: peak },
     { u: 0.62, value: peak * 0.95 },
     { u: 0.78, value: taper(0.72) },
@@ -129,6 +143,23 @@ export function widthProfile(body: BodyProportions, life: LifeShape = ADULT_SHAP
     { u: 0.97, value: taper(0.13) },
     { u: 1.0, value: 0 },
   ]
+}
+
+/**
+ * Width across the cheeks — the widest point of the head, and where the eyes sit.
+ *
+ * Here rather than at each call site because the alternative is `profile[2].value`, which is
+ * right until someone adds a control point to the head and then silently measures the wrong row.
+ * It has been exactly that: the skull and neck rows above are new, and two callers were reading
+ * fixed indices when they landed.
+ */
+export function headWidthOf(profile: readonly ControlPoint[], life: LifeShape = ADULT_SHAPE): number {
+  return profile.reduce((most, p) => (p.u <= life.headSpan ? Math.max(most, p.value) : most), 0)
+}
+
+/** Width at the thickest part of the mid-body — behind the neck, which is the widest point at all. */
+export function peakWidthOf(profile: readonly ControlPoint[], life: LifeShape = ADULT_SHAPE): number {
+  return profile.reduce((most, p) => (p.u > life.headSpan ? Math.max(most, p.value) : most), 0)
 }
 
 /**
