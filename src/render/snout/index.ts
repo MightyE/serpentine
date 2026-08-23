@@ -13,25 +13,21 @@
  *
  * ## Wiring
  *
- * A phenotype opts in by setting `extra.snoutShape` to {@link HOGNOSE_SNOUT_SHAPE} (done once,
- * in `species/hognose/phenotype.ts`'s base phenotype — every hognose has it, no trait needs to
- * set it). {@link drawUpturnedSnout} checks that flag itself and is a no-op for every other
- * phenotype, so wiring it into the actual game is exactly **one unconditional call**, in two
- * places:
+ * A phenotype opts in by setting `extra.snoutShape` to {@link HOGNOSE_SNOUT_SHAPE} (done once, in
+ * `species/hognose/phenotype.ts` — every hognose has it, no trait needs to set it).
+ * {@link drawUpturnedSnout} checks that flag itself and is a no-op for every other phenotype, so
+ * wiring it into a renderer is one unconditional call right after that renderer draws its face.
  *
- *   - `src/render/snake.ts`, right after its `drawFace(ctx, ribbon, this.phenotype, ...)` call
- *     in `draw()`: add `drawUpturnedSnout(ctx, ribbon, this.phenotype)`.
- *   - `src/render/life/view.ts`, right after its `drawLifeFace(...)` call in `draw()`: same line,
- *     same import.
- *
- * Both of those files are owned by another agent this cycle (see the hognose execution deposit),
- * which is why the change is not made here — this module is complete and self-guarding on its
- * own; it only needs the one call added at each site above to actually appear on screen.
+ * Every renderer that draws a snake now makes that call: `render/snake.ts`, `render/portrait.ts`,
+ * `render/life/view.ts`, `render/life/hatch.ts`, `render/pose/heldView.ts`, and
+ * `habitat/occupants/occupant.ts`. Add the line to any new one — a hognose without its nose is
+ * the bug this module exists to prevent, and it fails silently.
  */
 
 import type { Phenotype } from '../contract'
 import type { Ribbon } from '../ribbon'
-import { add, angleOf, scale, type Vec2 } from '../geometry'
+import { add, angleOf, perp, scale, type Vec2 } from '../geometry'
+import { headWidth } from '../head'
 import { lighten, mix, toCss } from '../colour'
 
 /** The `Phenotype.extra.snoutShape` value that selects this head shape. */
@@ -75,20 +71,27 @@ export interface SnoutOutline {
 export function upturnedSnoutOutline(ribbon: Ribbon): SnoutOutline {
   const tipPoint = ribbon.spine[0]
   const dir = ribbon.tangents[0]
-  const w = ribbon.widths[0] || 1
+  // Sized against the **head**, not `ribbon.widths[0]`. That is the snout-tip width, which the
+  // width profile pinches to about a third of the skull, so sizing off it drew this at a third
+  // of its intended size — a small bead stuck on the nose rather than part of the animal.
+  const w = headWidth(ribbon) || 1
 
-  const radiusAlong = 0.5 * w
-  const radiusAcross = 0.34 * w
-  const centre = add(tipPoint, scale(dir, 0.42 * w))
+  // How far the point reaches forward of the nose, and how wide it is where it meets it. The
+  // base half-width is the **nose's own** half-width, so the wedge starts exactly flush with the
+  // silhouette and continues its taper. Anything wider is a bulb on the end of the face: an
+  // ellipse centred forward of the tip was the first attempt here, and at any size that read it
+  // could actually be seen at, it read as a ball glued to the snout.
+  const radiusAlong = 0.34 * w
+  const radiusAcross = 0.5 * (ribbon.widths[0] || w * 0.34)
   const angle = angleOf(dir)
 
   return {
-    centre,
+    centre: tipPoint,
     radiusAlong,
     radiusAcross,
     angle,
-    tip: add(centre, scale(dir, radiusAlong)),
-    back: add(centre, scale(dir, -radiusAlong)),
+    tip: add(tipPoint, scale(dir, radiusAlong)),
+    back: add(tipPoint, scale(dir, -radiusAlong)),
   }
 }
 
@@ -110,40 +113,54 @@ export function upturnedSnoutOutline(ribbon: Ribbon): SnoutOutline {
 export function drawUpturnedSnout(ctx: CanvasRenderingContext2D, ribbon: Ribbon, phenotype: Phenotype): void {
   if (!hasUpturnedSnout(phenotype)) return
 
-  const { centre, radiusAlong, radiusAcross, angle, tip, back } = upturnedSnoutOutline(ribbon)
-  const bumpColour = mix(phenotype.baseColour, phenotype.patternColour, 0.18)
-  const keelHighlight = lighten(bumpColour, 0.2)
+  const { centre, radiusAlong, radiusAcross, tip } = upturnedSnoutOutline(ribbon)
+  const dir = ribbon.tangents[0]
+  const side = perp(dir)
+  const w = headWidth(ribbon) || 1
+
+  // The wedge is the head, continued. Barely off the body colour on purpose: the moment this
+  // fill is visibly its own colour it stops being the front of the snout and becomes an object
+  // resting on it. The keel and the shadow do all the shaping.
+  const bumpColour = mix(phenotype.baseColour, phenotype.patternColour, 0.07)
+  const keelHighlight = lighten(bumpColour, 0.18)
+
+  const left = add(centre, scale(side, radiusAcross))
+  const right = add(centre, scale(side, -radiusAcross))
+  // Shoulders a little forward of the base, so the sides bow out very slightly before closing
+  // to the point — a straight-sided triangle reads as a beak.
+  const shoulderL = add(add(centre, scale(dir, radiusAlong * 0.45)), scale(side, radiusAcross * 0.92))
+  const shoulderR = add(add(centre, scale(dir, radiusAlong * 0.45)), scale(side, -radiusAcross * 0.92))
 
   ctx.save()
 
   ctx.beginPath()
-  ctx.ellipse(centre.x, centre.y, radiusAlong, radiusAcross, angle, 0, Math.PI * 2)
+  ctx.moveTo(left.x, left.y)
+  ctx.quadraticCurveTo(shoulderL.x, shoulderL.y, tip.x, tip.y)
+  ctx.quadraticCurveTo(shoulderR.x, shoulderR.y, right.x, right.y)
+  ctx.closePath()
   ctx.fillStyle = toCss(bumpColour)
   ctx.fill()
 
-  // A soft shadow under the front half, so the bump reads as raised rather than flat.
+  // A soft shadow across the base, so the point reads as lifted off the ground rather than as a
+  // flat extension of the outline — this is the only cue a top-down view has for "upturned".
   ctx.save()
   ctx.clip()
   ctx.beginPath()
-  ctx.ellipse(
-    centre.x + Math.cos(angle) * radiusAlong * 0.25,
-    centre.y + Math.sin(angle) * radiusAlong * 0.25,
-    radiusAlong * 0.85,
-    radiusAcross * 0.85,
-    angle,
-    0,
-    Math.PI * 2,
-  )
-  ctx.fillStyle = 'rgba(20, 14, 16, 0.16)'
+  ctx.moveTo(left.x, left.y)
+  ctx.lineTo(right.x, right.y)
+  ctx.lineTo(add(right, scale(dir, -radiusAlong * 0.5)).x, add(right, scale(dir, -radiusAlong * 0.5)).y)
+  ctx.lineTo(add(left, scale(dir, -radiusAlong * 0.5)).x, add(left, scale(dir, -radiusAlong * 0.5)).y)
+  ctx.closePath()
+  ctx.fillStyle = 'rgba(20, 14, 16, 0.18)'
   ctx.fill()
   ctx.restore()
 
-  // The keel: a thin raised ridge down the midline, from the back of the bump to its tip.
+  // The keel: the raised ridge down the midline that gives the scale its name.
   ctx.strokeStyle = toCss(keelHighlight)
-  ctx.lineWidth = Math.max(1, (ribbon.widths[0] || 1) * 0.07)
+  ctx.lineWidth = Math.max(1, w * 0.045)
   ctx.lineCap = 'round'
   ctx.beginPath()
-  ctx.moveTo(back.x, back.y)
+  ctx.moveTo(centre.x, centre.y)
   ctx.lineTo(tip.x, tip.y)
   ctx.stroke()
 

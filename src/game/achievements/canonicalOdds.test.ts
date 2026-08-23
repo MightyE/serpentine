@@ -135,12 +135,12 @@ const VERIFIED: Record<OddsKey, () => number> = {
   },
 
   superAndRecessiveFromDoubleHets: () => {
-    // Hognose: anaconda is incomplete-dominant (the homozygote is Superconda, and it hatches);
+    // Hognose: conda is incomplete-dominant (the homozygote is Superconda, and it hatches);
     // albino is a simple recessive. Both homozygous at once.
-    const parent = { 'hognose-anaconda': het('anaconda'), 'hognose-albino': het('albino') }
+    const parent = { 'hognose-conda': het('conda'), 'hognose-albino': het('albino') }
     const d = pair(hognose, parent, parent)
-    return jointProbability(d, ['hognose-anaconda', 'hognose-albino'], (loci) =>
-      isHomozygous(loci['hognose-anaconda'], 'anaconda') && isHomozygous(loci['hognose-albino'], 'albino'),
+    return jointProbability(d, ['hognose-conda', 'hognose-albino'], (loci) =>
+      isHomozygous(loci['hognose-conda'], 'conda') && isHomozygous(loci['hognose-albino'], 'albino'),
     )
   },
 

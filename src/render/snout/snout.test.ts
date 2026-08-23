@@ -22,7 +22,10 @@ function fixtureRibbon(): Ribbon {
       { x: 20, y: -5 },
     ],
     us: [0, 0.5, 1],
-    widths: [8, 10, 6],
+    // Snout tip, head, tail. The first is much smaller than the second on purpose: a real
+    // width profile pinches the nose to about a third of the skull (`bodyShape.ts`'s
+    // `snoutBlunt`), and a fixture that flattens that hides the very bug this file guards.
+    widths: [6, 18, 6],
     tangents: [
       { x: 1, y: 0 },
       { x: 1, y: 0 },

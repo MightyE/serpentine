@@ -11,8 +11,10 @@
  * textbook case of its own inheritance mode:
  *
  *   - **Lavender** — simple recessive, pigment only. One copy shows nothing at all.
- *   - **Anaconda** — incomplete dominant, markings only. One copy is Anaconda, two is a third and
- *     more extreme phenotype, Superconda. (Never "co-dominant" — see `loci/anaconda.ts`.)
+ *   - **Conda** — incomplete dominant, markings only. One copy is Conda: far fewer, far larger
+ *     markings. Two copies is a third and more extreme phenotype, Superconda, with no markings
+ *     at all. (Never "co-dominant" — see `loci/conda.ts`.) Hognose-only, which the last test
+ *     here pins, because both names are hognose terms and mean nothing on another species.
  *
  * Run against the real `geneticsEngine`, not `testSupport/referenceEngine`, because what is under
  * test is what the shipped projections actually write onto a phenotype.
@@ -26,7 +28,7 @@ import { hognose } from './hognose'
 import { makeIndividual, wildTypeGenotype, withLoci } from './testSupport/fixtures'
 
 const LAVENDER = 'hognose-lavender'
-const ANACONDA = 'hognose-anaconda'
+const CONDA = 'hognose-conda'
 
 function look(overrides: Record<string, AllelePair>): Phenotype {
   const genotype = withLoci(wildTypeGenotype(hognose, 'male'), overrides)
@@ -72,12 +74,12 @@ describe('lavender: a recessive colour morph', () => {
   })
 })
 
-describe('anaconda: an incomplete-dominant pattern morph', () => {
-  const conda = look({ [ANACONDA]: ['wild-type', 'anaconda'] })
-  const superconda = look({ [ANACONDA]: ['anaconda', 'anaconda'] })
+describe('conda: an incomplete-dominant pattern morph', () => {
+  const conda = look({ [CONDA]: ['wild-type', 'conda'] })
+  const superconda = look({ [CONDA]: ['conda', 'conda'] })
 
   it('gives each dose its own name on the pattern axis', () => {
-    expect(conda.patternMorph).toBe('Anaconda')
+    expect(conda.patternMorph).toBe('Conda')
     expect(superconda.patternMorph).toBe('Superconda')
     // The three-phenotype signature of incomplete dominance: heterozygote is neither parent.
     expect(conda.patternMorph).not.toBe(WILD.patternMorph)
@@ -91,13 +93,40 @@ describe('anaconda: an incomplete-dominant pattern morph', () => {
     expect(pigmentOf(superconda)).toEqual(pigmentOf(WILD))
   })
 
-  it('reduces the markings at one copy and removes them at two', () => {
+  it('makes the markings fewer and bigger at one copy, not merely different', () => {
     // One copy re-tunes the blotches in place; the stage list is the same shape.
     expect(stageNames(conda)).toEqual(stageNames(WILD))
-    expect(conda.stages).not.toEqual(WILD.stages)
-    // Two copies adds the reduction pass on top.
-    expect(stageNames(superconda)).toContain('modifier:patternReduction')
-    expect(stageNames(WILD)).not.toContain('modifier:patternReduction')
+
+    const blotches = (p: Phenotype) =>
+      p.stages.find((s) => s.kind === 'pattern' && s.name === 'blotches')!.params as Record<string, number>
+    const wild = blotches(WILD)
+    const one = blotches(conda)
+    // `scaleU` is blotch frequency along the body — lower is fewer and bigger. `threshold` is
+    // how much of the body is covered — higher is less. Both must move, and this asserts both,
+    // because moving one alone gives either a merged coat or the same small blotches with holes.
+    expect(one.scaleU).toBeLessThan(wild.scaleU)
+    expect(one.threshold).toBeGreaterThan(wild.threshold)
+  })
+
+  it('draws no markings whatsoever at two copies', () => {
+    // Not "reduced to a faint stripe", and specifically not a `patternReduction` modifier laid
+    // over markings that were still drawn underneath — that is what used to leave a dorsal
+    // stripe on an animal that is meant to be clean. The pattern never forms.
+    expect(superconda.stages.filter((s) => s.kind === 'pattern')).toHaveLength(0)
+    expect(stageNames(superconda)).not.toContain('modifier:patternReduction')
+    // The belly mask survives: an underside is not a marking.
+    expect(stageNames(superconda)).toContain('mask:belly')
+  })
+
+  it('belongs to the hognose and to nothing else', () => {
+    for (const species of allSpecies) {
+      const has = species.loci.some(
+        (l) => l.id === CONDA || l.alleles.some((a) => a.id === 'conda' || a.id === 'superconda'),
+      )
+      expect(has, `${species.id} should ${species.id === 'hognose' ? '' : 'not '}declare conda`).toBe(
+        species.id === 'hognose',
+      )
+    }
   })
 })
 
@@ -105,14 +134,14 @@ describe('the two axes compose', () => {
   it('names a lavender superconda on both, independently', () => {
     const both = look({
       [LAVENDER]: ['lavender', 'lavender'],
-      [ANACONDA]: ['anaconda', 'anaconda'],
+      [CONDA]: ['conda', 'conda'],
     })
     expect(both.colourMorph).toBe('Lavender')
     expect(both.patternMorph).toBe('Superconda')
     expect(both.label).toBe('Lavender Superconda')
     // Each axis matches the animal carrying that trait alone — they do not interfere.
     expect(both.colourMorph).toBe(look({ [LAVENDER]: ['lavender', 'lavender'] }).colourMorph)
-    expect(both.patternMorph).toBe(look({ [ANACONDA]: ['anaconda', 'anaconda'] }).patternMorph)
+    expect(both.patternMorph).toBe(look({ [CONDA]: ['conda', 'conda'] }).patternMorph)
     expect(pigmentOf(both)).toEqual(pigmentOf(look({ [LAVENDER]: ['lavender', 'lavender'] })))
   })
 })

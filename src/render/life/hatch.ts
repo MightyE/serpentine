@@ -43,6 +43,7 @@ import { drawEgg, drawNest, eggShellFor, type EggGeometry, type EggShell } from 
 import { drawLifeFace } from './face'
 import { paintBody } from './paint'
 import { eyePlacementAtAge, lifeShapeAtAge } from './stage'
+import { drawUpturnedSnout } from '../snout'
 
 export type HatchPhase = 'waiting' | 'stirring' | 'pipping' | 'tearing' | 'emerging' | 'out'
 
@@ -217,6 +218,7 @@ export class HatchAnimation {
       const blink = 1 - smoothstep(0.45, 0.8, revealed)
       const tongue = t < OUT_AT + 0.55 ? 0 : Math.max(0, Math.sin((t - OUT_AT - 0.55) * 4.4))
       drawLifeFace(ctx, ribbon, this.phenotype, { blink, tongue }, 0)
+      drawUpturnedSnout(ctx, ribbon, this.phenotype)
     }
   }
 }

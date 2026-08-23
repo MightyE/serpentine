@@ -57,9 +57,45 @@ const EXTRA_CARE_EXPLANATIONS: readonly string[] = [
  * learn something from. The two constants that matter — how many exist, and how they split — are
  * both named, and both live where the balance charter can see them.
  */
+/**
+ * The one deleterious recessive in the pool that has a name and a face.
+ *
+ * Every other entry is anonymous on purpose — see {@link makeLoadPool}. This one is not, because
+ * the game draws it: a hatchling homozygous for it has visibly oversized eyes, and may lose its
+ * sight as an adult. `game/congenital.ts` owns what it looks like and what it means.
+ *
+ * It is **one of the sixty**, not a sixty-first. That matters: `LOAD_POOL_SIZE`'s doc comment
+ * derives the entire inbreeding-depression signal from `P = 60` and `k = 3`, and every hatch-rate
+ * invariant in `tuning.test.ts` is downstream of that arithmetic. Giving one existing entry a
+ * name changes no probability anywhere. Adding a sixty-first, or drawing this one at a special
+ * rate, would quietly move all of them.
+ *
+ * So it is exactly as common as any other recessive in the pool: a founder carries it about one
+ * time in twenty, and it only surfaces when a line doubles it up. That is the point — it is what
+ * heavy inbreeding costs, not a die rolled against a number on a card.
+ */
+export const BUG_EYES_LOCUS = `${LOAD_LOCUS_PREFIX}bug-eyes`
+
+const BUG_EYES_ENTRY: LoadAllele = {
+  locus: BUG_EYES_LOCUS,
+  allele: `${LOAD_LOCUS_PREFIX}bug-eyes-recessive`,
+  outcome: 'needsExtraCare',
+  explanation:
+    'Two copies of this recessive leave the hatchling with eyes far larger than they should be, ' +
+    'and the eyelid scale over them never seats properly. It hatches and it grows, but its ' +
+    'sight often goes as it matures. Both parents carried one copy and looked entirely ordinary ' +
+    'doing it — this is what a closed line costs, and it is the reason to outcross.',
+}
+
 export function makeLoadPool(id = 'wild-population'): GeneticLoadPool {
   const entries: LoadAllele[] = []
   for (let i = 0; i < LOAD_POOL_SIZE; i++) {
+    // The named one takes a slot rather than adding one. `i === 0` is an extra-care slot under
+    // any `LOAD_EXTRA_CARE_FRACTION`, so it is the correct slot to spend on an animal that lives.
+    if (i === 0) {
+      entries.push(BUG_EYES_ENTRY)
+      continue
+    }
     // Interleaved rather than "first half / second half", so any subset a founder draws lands
     // near the designed split instead of depending on where in the pool it happened to look.
     const extraCare = i % Math.round(1 / LOAD_EXTRA_CARE_FRACTION) === 0

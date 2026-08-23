@@ -25,6 +25,7 @@
  */
 import { geneticsEngine } from '../genetics'
 import { expressedLoad, seedFounderLoad, vigor as vigorOf, type GeneticLoadPool } from '../genetics/load'
+import { applyCongenitalOverlay } from './congenital'
 import { inbreedingCoefficient, kinship } from '../genetics/pedigree'
 import type {
   Evidence,
@@ -335,8 +336,23 @@ export class Session {
     return loaded
   }
 
+  /**
+   * What this animal looks like right now — its genotype expressed, plus any congenital
+   * condition it hatched with.
+   *
+   * The overlay lives here rather than inside `express` because belief inference compares the
+   * expressed phenotype keys of *candidate* genotypes, and a candidate has no expressed load to
+   * overlay. See `congenital.ts`, and `evidenceUnder` below, which deliberately keys evidence
+   * off the bare `express` for the same reason.
+   */
   phenotype(record: SnakeRecord): Phenotype {
-    return geneticsEngine.express(record.individual, this.speciesOf(record).playable)
+    const expressed = geneticsEngine.express(record.individual, this.speciesOf(record).playable)
+    return applyCongenitalOverlay(
+      expressed,
+      record.individual.id,
+      this.expressedLoadOf(record).map((entry) => entry.locus),
+      this.ageOf(record),
+    )
   }
 
   sexOf(record: SnakeRecord): Sex {

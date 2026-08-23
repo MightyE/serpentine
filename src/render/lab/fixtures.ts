@@ -328,6 +328,31 @@ export const FIXTURES: readonly Phenotype[] = [
     extra: HOGNOSE_EXTRA,
   },
   {
+    seed: 'fixture-hognose-conda',
+    label: 'Hognose — conda',
+    colourMorph: 'Normal',
+    patternMorph: 'Conda',
+    baseColour: rgba(176, 146, 96),
+    patternColour: rgba(92, 62, 40),
+    bellyColour: rgba(238, 222, 182),
+    eye: eyes([112, 84, 50], 1.3),
+    body: body(0.7, 1.4, 1.0, 0.9),
+    effects: [],
+    stages: [
+      { kind: 'base', name: 'solid', params: { colour: '@baseColour' } },
+      {
+        // One copy of conda. Same blotches stage as the wild type above, at a much lower `scaleU`
+        // and a higher `threshold`: far fewer markings, each far larger. Keep this in step with
+        // `species/hognose/loci/conda.ts` — the projection is the real one, this is the picture.
+        kind: 'pattern',
+        name: 'blotches',
+        params: { colour: '@patternColour', scaleU: 3.2, scaleV: 0.62, threshold: 0.6, softness: 0.1, octaves: 3 },
+      },
+      { kind: 'mask', name: 'belly', params: { colour: '@bellyColour', start: 0.74 } },
+    ],
+    extra: HOGNOSE_EXTRA,
+  },
+  {
     seed: 'fixture-hognose-superconda',
     label: 'Hognose — superconda',
     colourMorph: 'Normal',
@@ -338,21 +363,11 @@ export const FIXTURES: readonly Phenotype[] = [
     eye: eyes([112, 84, 50], 1.3),
     body: body(0.7, 1.4, 1.0, 0.9),
     effects: [],
+    // Two copies of conda: no pattern stage at all, so no markings are ever drawn — and, unlike
+    // ball python champagne's real super form, not lethal. See `species/hognose/loci/conda.ts`.
     stages: [
       { kind: 'base', name: 'solid', params: { colour: '@baseColour' } },
-      {
-        kind: 'pattern',
-        name: 'blotches',
-        params: { colour: '@patternColour', scaleU: 6, scaleV: 0.62, threshold: 0.42, softness: 0.14, octaves: 3 },
-      },
       { kind: 'mask', name: 'belly', params: { colour: '@bellyColour', start: 0.74 } },
-      // Two copies of anaconda: near-patternless but for a thin dorsal stripe, and — unlike ball
-      // python champagne's real super form — not lethal. See `species/hognose/loci/anaconda.ts`.
-      {
-        kind: 'modifier',
-        name: 'patternReduction',
-        params: { amount: 0.94, keepDorsal: 0.1, softness: 0.16, towards: '@baseColour' },
-      },
     ],
     extra: HOGNOSE_EXTRA,
   },

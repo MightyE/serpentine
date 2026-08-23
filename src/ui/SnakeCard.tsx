@@ -22,6 +22,7 @@
  */
 import { useState } from 'react'
 import { isLoadLocus } from '../game/loadPool'
+import { isBlind } from '../game/congenital'
 import { percent, type Session } from '../game/session'
 import { noticeName } from '../game/cheats'
 import type { SnakeRecord } from '../game/roster'
@@ -92,6 +93,11 @@ export function SnakeCard({ session, record, onClose, onSell }: SnakeCardProps) 
   const value = session.valueOf(record)
   const age = session.ageOf(record)
   const load = session.expressedLoadOf(record)
+  const blind = isBlind(
+    record.individual.id,
+    load.map((entry) => entry.locus),
+    session.ageOf(record),
+  )
   const revealed = session.state.flags.get('revealGenotypes') === true
   const knowledge = session.knowledgeOf(record)
 
@@ -163,6 +169,15 @@ export function SnakeCard({ session, record, onClose, onSell }: SnakeCardProps) 
           <div className="needs-care">
             <strong>Needs extra care</strong>
             <p>{load[0]!.explanation}</p>
+            {blind && (
+              // Stated as a fact about how the animal lives, not as a verdict on it. A blind
+              // snake hunts by scent and heat and is good at it; the only thing that has changed
+              // is what it needs from the keeper.
+              <p>
+                Its sight has gone. It finds food by scent and by heat, and it does that well — it
+                just needs to be approached where it can smell you coming.
+              </p>
+            )}
             <button onClick={() => session.giveCareTo(record.individual.id)}>Spend time with it</button>
           </div>
         )}

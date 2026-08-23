@@ -96,7 +96,16 @@ export function dilationPupilBonus(dilation: number): number {
   return DILATION_PUPIL_GAIN * dilation
 }
 
-function headWidth(ribbon: Ribbon): number {
+/**
+ * The width across the head, at the eyes — very nearly the widest part of the skull.
+ *
+ * Exported because everything drawn *on* a head has to be sized against the head, and the
+ * tempting shortcut, `ribbon.widths[0]`, is the width at the **snout tip**, which the width
+ * profile deliberately pinches to about a third of this (see `bodyShape.ts`'s `snoutBlunt`).
+ * `render/snout/` sized the hognose's rostral bump off `widths[0]` and drew it at a third of its
+ * intended size for exactly that reason.
+ */
+export function headWidth(ribbon: Ribbon): number {
   // The width where the eyes are, which is very nearly the widest part of the head.
   let i = 0
   while (i < ribbon.us.length - 1 && ribbon.us[i] < EYE_U) i++

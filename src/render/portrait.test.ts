@@ -29,7 +29,7 @@ import { describe, expect, it } from 'vitest'
 import { bodyLength, widthProfile } from './bodyShape'
 import { rgba } from './colour'
 import { distance } from './geometry'
-import { outlineBounds, paintedBounds, portraitLayout } from './portrait'
+import { outlineBounds, paintedBounds, portraitCacheKeyFor, portraitLayout } from './portrait'
 import type { Phenotype } from './contract'
 
 const SUBJECT: Phenotype = {
@@ -142,5 +142,36 @@ describe('portrait layout', () => {
     // on screen — that is what "fit" means. What it must never do is keep its zoom and get fat.
     expect(big.zoom).toBeLessThan(small.zoom)
     expect(outlineBounds(big.ribbon).width * big.zoom).toBeCloseTo(outlineBounds(small.ribbon).width * small.zoom, 6)
+  })
+})
+
+describe('the portrait cache tells apart everything a portrait draws', () => {
+  // `texture.ts`'s `phenotypeKey` covers markings only, and `express` leaves every animal of a
+  // species sharing one `'unseeded'` seed — so a portrait keyed on it alone hands one animal's
+  // picture to another that differs in eyes, build, or snout. See `portraitKey`.
+  const portraitOf = (p: Phenotype) => portraitLayout(p, 350.7, 208.5)
+
+  it('draws a different body for a different build', () => {
+    const stout = { ...SUBJECT, body: { ...SUBJECT.body, girthScale: 1.6 } }
+    expect(Math.max(...portraitOf(stout).ribbon.widths)).toBeGreaterThan(
+      Math.max(...portraitOf(SUBJECT).ribbon.widths),
+    )
+  })
+
+  it('gives two animals that differ only in their eyes two different cache keys', () => {
+    // Rendering needs a canvas, which this environment does not have — so this asserts on the
+    // key itself, which is the thing that was wrong.
+    const blind: Phenotype = {
+      ...SUBJECT,
+      eye: { ...SUBJECT.eye, irisColour: rgba(186, 192, 196), highlight: false },
+    }
+    const bugEyed: Phenotype = { ...SUBJECT, eye: { ...SUBJECT.eye, sizeScale: SUBJECT.eye.sizeScale * 2 } }
+    const keys = [SUBJECT, blind, bugEyed].map(portraitCacheKeyFor)
+    expect(new Set(keys).size).toBe(3)
+  })
+
+  it('gives a hognose and a same-coloured non-hognose two different cache keys', () => {
+    const hognose: Phenotype = { ...SUBJECT, extra: { snoutShape: 'hognose-upturned' } }
+    expect(portraitCacheKeyFor(hognose)).not.toBe(portraitCacheKeyFor(SUBJECT))
   })
 })

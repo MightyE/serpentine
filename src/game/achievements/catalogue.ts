@@ -412,13 +412,13 @@ const MORPH_BOOK: readonly Achievement[] = [
   }),
   morphPage({
     species: HOG,
-    locus: 'hognose-anaconda',
-    allele: 'anaconda',
-    morph: 'anaconda hognose',
+    locus: 'hognose-conda',
+    allele: 'conda',
+    morph: 'conda hognose',
     label: 'Broken Bands',
-    description: 'Hatch an anaconda western hognose.',
+    description: 'Hatch an conda western hognose.',
     odds: DOMINANT,
-    note: 'an anaconda × a normal',
+    note: 'an conda × a normal',
   }),
   morphPage({
     species: HOG,
@@ -619,17 +619,17 @@ const COMBINATIONS: readonly Achievement[] = [
     description:
       'Produce a Superconda that is also albino — a homozygous incomplete-dominant stacked on a ' +
       'recessive.',
-    requires: paired(HOG, 'hognose-anaconda', 'hognose-albino', 'produce a superconda albino'),
-    effort: [breed('superAndRecessiveFromDoubleHets', 'anaconda × anaconda, both het albino')],
+    requires: paired(HOG, 'hognose-conda', 'hognose-albino', 'produce a superconda albino'),
+    effort: [breed('superAndRecessiveFromDoubleHets', 'conda × conda, both het albino')],
   },
   {
-    id: 'combinations.hognose.anaconda-arctic',
+    id: 'combinations.hognose.conda-arctic',
     category: 'combinations',
-    label: 'Arctic Anaconda',
-    description: 'Produce a western hognose that is both anaconda and arctic.',
-    requires: paired(HOG, 'hognose-anaconda', 'hognose-arctic', 'produce an arctic anaconda'),
+    label: 'Arctic Conda',
+    description: 'Produce a western hognose that is both conda and arctic.',
+    requires: paired(HOG, 'hognose-conda', 'hognose-arctic', 'produce an arctic conda'),
     effort: [
-      breed(DOMINANT, 'an anaconda to breed from'),
+      breed(DOMINANT, 'an conda to breed from'),
       breed(DOMINANT, 'crossing it onto an arctic line'),
     ],
   },
@@ -1353,11 +1353,11 @@ const CURIOSITIES: readonly Achievement[] = [
       'Produce a Superconda after learning that super champagne does not hatch. Two incomplete ' +
       'dominants, two different answers.',
     requires: all(
-      showed(HOG, 'hognose-anaconda', 'anaconda', 'anaconda hognose', 4),
+      showed(HOG, 'hognose-conda', 'conda', 'conda hognose', 4),
       counter(TALLY.viabilityFactsRead, 1, 'read the explanation for a non-viable egg'),
     ),
-    effort: [breed('incompleteDomSuperFromHetXHet', 'anaconda × anaconda, chasing the super')],
-    supersedes: 'traits.hognose.anaconda',
+    effort: [breed('incompleteDomSuperFromHetXHet', 'conda × conda, chasing the super')],
+    supersedes: 'traits.hognose.conda',
     hidden: true,
   },
   {

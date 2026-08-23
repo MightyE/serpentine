@@ -34,6 +34,7 @@ import { drawFace, tongueOutline } from './head'
 import { buildRibbon, traceRibbon, paintRibbon, type Ribbon } from './ribbon'
 import { patternTextureFor } from './texture'
 import { phenotypeKey } from './texture'
+import { drawUpturnedSnout, upturnedSnoutOutline, hasUpturnedSnout } from './snout'
 
 const cache = new Map<string, HTMLCanvasElement>()
 
@@ -54,7 +55,7 @@ export function renderPortrait(phenotype: Phenotype, options: PortraitOptions = 
   const width = options.width ?? 220
   const height = options.height ?? 140
   const ratio = options.pixelRatio ?? (typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1)
-  const key = `${phenotypeKey(phenotype)}|${width}x${height}@${ratio}`
+  const key = `${portraitCacheKeyFor(phenotype)}|${width}x${height}@${ratio}`
   const cached = cache.get(key)
   if (cached) return cached
 
@@ -86,9 +87,36 @@ export function renderPortrait(phenotype: Phenotype, options: PortraitOptions = 
   paintRibbon(ctx, ribbon, texture.canvas, texture.width, texture.height, 0)
   for (const effect of effects) effect.drawOver?.(effectCtx)
   drawFace(ctx, ribbon, phenotype, { blink: 0, tongue: PORTRAIT_TONGUE })
+  drawUpturnedSnout(ctx, ribbon, phenotype)
 
   cache.set(key, canvas)
   return canvas
+}
+
+/**
+ * What makes two portraits the same picture.
+ *
+ * `texture.ts`'s {@link phenotypeKey} is **not** enough, and reusing it here was a real bug. That
+ * key covers seed, the three body colours and the stage list, which is exactly right for the
+ * thing it was written for: a baked markings texture, which is markings and nothing else. A
+ * portrait is more than its markings. It also draws the eyes, the body's own proportions, the
+ * effect layers, and — for a hognose — the upturned snout that `extra.snoutShape` opts into.
+ *
+ * None of that was in the key, and `express` never seeds `draft.seed` either, so every animal of
+ * a species carries the same `'unseeded'`. Two animals alike in colour therefore shared one
+ * cached picture. It went unnoticed while every difference that mattered happened to be a colour
+ * difference; it stopped being invisible the moment an animal could go blind, because a blind
+ * snake differs from a sighted clutchmate in nothing but its eyes — and got handed the
+ * clutchmate's portrait, catchlight and all.
+ */
+export function portraitCacheKeyFor(phenotype: Phenotype): string {
+  return [
+    phenotypeKey(phenotype),
+    JSON.stringify(phenotype.eye),
+    JSON.stringify(phenotype.body),
+    [...phenotype.effects].sort().join(','),
+    JSON.stringify(phenotype.extra),
+  ].join('|')
 }
 
 /** Forget every cached portrait — after editing a stage, say. */
@@ -260,7 +288,7 @@ export interface PortraitLayout {
  */
 export function portraitLayout(phenotype: Phenotype, width: number, height: number): PortraitLayout {
   const ribbon = buildRibbon(poseSCurve(bodyLength(phenotype.body), POSE_POINTS), widthProfile(phenotype.body))
-  const b = paintedBounds(ribbon)
+  const b = paintedBounds(ribbon, phenotype)
   const zoom = Math.min((width * FILL) / b.width, (height * FILL) / b.height)
   return {
     ribbon,
@@ -285,17 +313,31 @@ export function portraitLayout(phenotype: Phenotype, width: number, height: numb
  * design (see `head.ts`), which the {@link FILL} margin already covers several times over, and
  * folding them in here would tie the art window's size to a per-animal `sizeScale`.
  */
-export function paintedBounds(ribbon: Ribbon): { x: number; y: number; width: number; height: number } {
+export function paintedBounds(
+  ribbon: Ribbon,
+  phenotype?: Phenotype,
+): { x: number; y: number; width: number; height: number } {
   const body = outlineBounds(ribbon)
   let minX = body.x
   let minY = body.y
   let maxX = body.x + body.width
   let maxY = body.y + body.height
-  for (const p of tongueOutline(ribbon, PORTRAIT_TONGUE)) {
+  const track = (p: Vec2): void => {
     if (p.x < minX) minX = p.x
     if (p.y < minY) minY = p.y
     if (p.x > maxX) maxX = p.x
     if (p.y > maxY) maxY = p.y
+  }
+  for (const p of tongueOutline(ribbon, PORTRAIT_TONGUE)) track(p)
+  // A hognose's upturned snout pokes forward of the nose too. It reaches less far than the
+  // tongue does and in the same direction, so today it never sets the bound on its own — but
+  // "currently covered by something else" is not a reason to leave it out of a function whose
+  // whole job is to know what gets drawn.
+  if (phenotype && hasUpturnedSnout(phenotype)) {
+    const snout = upturnedSnoutOutline(ribbon)
+    const reach = Math.max(snout.radiusAlong, snout.radiusAcross)
+    track({ x: snout.centre.x - reach, y: snout.centre.y - reach })
+    track({ x: snout.centre.x + reach, y: snout.centre.y + reach })
   }
   return { x: minX, y: minY, width: Math.max(1e-6, maxX - minX), height: Math.max(1e-6, maxY - minY) }
 }

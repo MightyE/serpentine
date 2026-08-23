@@ -6,12 +6,12 @@ import { withMorph } from '../../support/phenotypeKey'
 import { rgb } from '../phenotype'
 
 /**
- * Arctic: a second **incomplete dominant** on this species, independent of `anaconda.ts`. One
+ * Arctic: a second **incomplete dominant** on this species, independent of `conda.ts`. One
  * copy darkens and outlines the dorsal blotches (the hobby calls out the "eyebrow" markings
  * above the eyes specifically). Two copies ("Superarctic") pushes melanin further and washes the
  * background toward white, reducing the head pattern too. Corroborated across the Hognose Wiki
  * and independent hobbyist morph guides, both naming it incomplete dominant with a distinct
- * homozygous super form — the same shape as `anaconda.ts`, from an unrelated real mutation.
+ * homozygous super form — the same shape as `conda.ts`, from an unrelated real mutation.
  */
 export const hognoseArcticLocus: Locus = {
   id: 'hognose-arctic',
@@ -45,7 +45,7 @@ export const hognoseArcticProjection: TraitProjection<Phenotype> = {
       Object.assign(draft, {
         ...withMorph(draft, 'colour', 'Superarctic'),
         // Melanin concentrates into the blotches while the background washes out toward white —
-        // the opposite move from anaconda's pattern reduction, so the two stay visually distinct
+        // the opposite move from conda's pattern reduction, so the two stay visually distinct
         // if a save file ever lets a player compare them side by side.
         baseColour: rgb(232, 226, 220),
         patternColour: rgb(38, 32, 30),

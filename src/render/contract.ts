@@ -255,7 +255,7 @@ export interface Phenotype {
    *
    * {@link label} is the whole name — "Lavender Superconda" — and stays the thing you put on a
    * listing. These two are that name taken apart, because the axes are independent in a way the
-   * combined string hides: lavender is a recessive that changes only pigment, anaconda an
+   * combined string hides: lavender is a recessive that changes only pigment, conda an
    * incomplete dominant that changes only markings, and a keeper pairing for one of them needs to
    * see at a glance what the other side of the animal is. A single string cannot answer "what
    * pattern is that snake" without the reader knowing which words are pattern words.

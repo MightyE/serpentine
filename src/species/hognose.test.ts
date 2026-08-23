@@ -88,16 +88,16 @@ describe('hognose: toffeebelly, lavender, sable, evans hypo (all simple recessiv
   })
 })
 
-describe('hognose: anaconda / superconda (incomplete dominant, not lethal)', () => {
+describe('hognose: conda / superconda (incomplete dominant, not lethal)', () => {
   it('has three distinct forms: wild-type, one copy, two copies', () => {
-    expect(traitsFor({ 'hognose-anaconda': ['wild-type', 'wild-type'] }).hognoseAnacondaForm).toBe('wildType')
-    expect(traitsFor({ 'hognose-anaconda': ['wild-type', 'anaconda'] }).hognoseAnacondaForm).toBe('anaconda')
-    expect(traitsFor({ 'hognose-anaconda': ['anaconda', 'anaconda'] }).hognoseAnacondaForm).toBe('superconda')
+    expect(traitsFor({ 'hognose-conda': ['wild-type', 'wild-type'] }).hognoseCondaForm).toBe('wildType')
+    expect(traitsFor({ 'hognose-conda': ['wild-type', 'conda'] }).hognoseCondaForm).toBe('conda')
+    expect(traitsFor({ 'hognose-conda': ['conda', 'conda'] }).hognoseCondaForm).toBe('superconda')
   })
 
   it('gives the label "Superconda" for the homozygous form, and it stays viable', () => {
     const genotype = withLoci(wildTypeGenotype(hognose, 'male'), {
-      'hognose-anaconda': ['anaconda', 'anaconda'],
+      'hognose-conda': ['conda', 'conda'],
     })
     const superconda = engine.express(makeIndividual(hognose, genotype), hognose)
     expect(superconda.label).toBe('Superconda')
@@ -109,7 +109,7 @@ describe('hognose: anaconda / superconda (incomplete dominant, not lethal)', () 
   })
 })
 
-describe('hognose: arctic / superarctic (incomplete dominant, independent of anaconda)', () => {
+describe('hognose: arctic / superarctic (incomplete dominant, independent of conda)', () => {
   it('has three distinct forms: wild-type, one copy, two copies', () => {
     expect(traitsFor({ 'hognose-arctic': ['wild-type', 'wild-type'] }).hognoseArcticForm).toBe('wildType')
     expect(traitsFor({ 'hognose-arctic': ['wild-type', 'arctic'] }).hognoseArcticForm).toBe('arctic')

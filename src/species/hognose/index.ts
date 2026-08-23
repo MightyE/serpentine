@@ -35,7 +35,7 @@ import {
   hognoseEvansHypoProjection,
   hognoseEvansHypoNote,
 } from './loci/evansHypo'
-import { hognoseAnacondaLocus, hognoseAnacondaProjection, hognoseAnacondaNote } from './loci/anaconda'
+import { hognoseCondaLocus, hognoseCondaProjection, hognoseCondaNote } from './loci/conda'
 import { hognoseArcticLocus, hognoseArcticProjection, hognoseArcticNote } from './loci/arctic'
 
 /** Real traits only. Every entry here is asserted in `hognose.test.ts`. */
@@ -46,7 +46,7 @@ export const hognoseRealTraitNotes: RealTraitNotes = {
   'hognose-lavender': hognoseLavenderNote,
   'hognose-sable': hognoseSableNote,
   'hognose-evans-hypo': hognoseEvansHypoNote,
-  'hognose-anaconda': hognoseAnacondaNote,
+  'hognose-conda': hognoseCondaNote,
   'hognose-arctic': hognoseArcticNote,
 }
 
@@ -61,7 +61,7 @@ export const hognose: SpeciesDefinition<Phenotype> = {
     hognoseLavenderLocus,
     hognoseSableLocus,
     hognoseEvansHypoLocus,
-    hognoseAnacondaLocus,
+    hognoseCondaLocus,
     hognoseArcticLocus,
   ],
   polygenic: [],
@@ -73,11 +73,11 @@ export const hognose: SpeciesDefinition<Phenotype> = {
     hognoseLavenderProjection,
     hognoseSableProjection,
     hognoseEvansHypoProjection,
-    hognoseAnacondaProjection,
+    hognoseCondaProjection,
     hognoseArcticProjection,
   ],
   modifiers: [],
-  // Anaconda/Superconda is explicitly not lethal — see `loci/anaconda.ts`. No viability rules.
+  // Conda/Superconda is explicitly not lethal — see `loci/conda.ts`. No viability rules.
   viability: [],
   phenotypeKey: phenotypeKeyFor,
   phenotypeLabel: (p) => p.label,

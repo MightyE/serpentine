@@ -92,7 +92,7 @@ export const CANONICAL_ODDS = {
   superAndRecessiveFromDoubleHets: {
     pairing:
       'two animals each heterozygous for an incomplete-dominant trait and carrying a recessive, ' +
-      'chasing the super form on the recessive background (anaconda + albino → superconda albino)',
+      'chasing the super form on the recessive background (conda + albino → superconda albino)',
     probabilityPerHatchling: 1 / 16,
     reasoning:
       'A super form is a homozygote and so is a recessive, so both targets are a quarter each and ' +
